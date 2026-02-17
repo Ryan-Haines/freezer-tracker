@@ -518,7 +518,7 @@ function App() {
               />
             </div>
             <div style={{ marginBottom: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   onClick={() => { setCubeEditorTarget(null); setShowCubeEditor(true) }}
@@ -528,7 +528,35 @@ function App() {
                     fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'
                   }}
                 >📦 Set Dimensions</button>
-                <span style={{ fontSize: '14px', color: '#666', fontWeight: 500 }}>{newContainer.width}×{newContainer.depth}×{newContainer.height} in</span>
+                <span style={{ fontSize: '12px', color: '#999' }}>or</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <input
+                    type="number"
+                    min="0.1"
+                    max="200"
+                    step="0.1"
+                    value={((newContainer.width * newContainer.depth * newContainer.height) / 1728).toFixed(1)}
+                    onChange={(e) => {
+                      const cuft = parseFloat(e.target.value)
+                      if (!cuft || cuft <= 0) return
+                      const cubicInches = cuft * 1728
+                      // Scale current proportions to match new volume
+                      const curVol = newContainer.width * newContainer.depth * newContainer.height
+                      const scale = Math.cbrt(cubicInches / (curVol || 1))
+                      setNewContainer({
+                        ...newContainer,
+                        width: Math.max(4, Math.min(72, Math.round(newContainer.width * scale))),
+                        depth: Math.max(4, Math.min(72, Math.round(newContainer.depth * scale))),
+                        height: Math.max(4, Math.min(72, Math.round(newContainer.height * scale))),
+                      })
+                    }}
+                    style={{
+                      width: '65px', padding: '6px 8px', textAlign: 'center',
+                      border: '1.5px solid #ddd', borderRadius: '6px', fontSize: '14px', fontWeight: 500
+                    }}
+                  />
+                  <span style={{ fontSize: '13px', color: '#666', fontWeight: 500 }}>ft³</span>
+                </div>
               </div>
             </div>
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
