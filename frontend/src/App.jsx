@@ -134,6 +134,8 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
 
+  const activeContainer = containers.find(c => c.id === activeContainerId)
+
   const getContainerVolume = () => {
     if (!activeContainer) return DEFAULT_W * DEFAULT_D * DEFAULT_H
     return (activeContainer.width || DEFAULT_W) * (activeContainer.depth || DEFAULT_D) * (activeContainer.height || DEFAULT_H)
@@ -385,8 +387,6 @@ function App() {
     .tab-container { -ms-overflow-style: none; scrollbar-width: none; }
   `
 
-  // Get active container
-  const activeContainer = containers.find(c => c.id === activeContainerId)
   const getContainerDisplayName = (container) => {
     if (container?.name && container?.icon) return `${container.icon} ${container.name}`
     return container?.name || container?.icon || 'Container'
