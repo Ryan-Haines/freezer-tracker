@@ -1,6 +1,6 @@
 # 🧊 Freezer Tracker
 
-![Freezer Tracker](preview.jpeg)
+<img src="preview.jpeg" alt="Freezer Tracker" width="400">
 
 A simple, self-hosted freezer inventory app. Track what's in your freezer, add items with natural language, and share access over Tailscale.
 
