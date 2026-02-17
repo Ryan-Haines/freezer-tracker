@@ -130,6 +130,8 @@ function App() {
   
   // Cube editor state
   const [showCubeEditor, setShowCubeEditor] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [cubeEditorTarget, setCubeEditorTarget] = useState(null) // null = new container, container id = editing existing
   
   // Voice recording state
@@ -273,14 +275,11 @@ function App() {
   }
   
   const handleDeleteContainer = async () => {
-    const activeContainer = containers.find(c => c.id === activeContainerId)
-    if (!activeContainer || containers.length <= 1) return
-    
-    const containerName = activeContainer.name || activeContainer.icon || 'this container'
-    if (!confirm(`Delete ${containerName} and all its items?`)) return
-    
+    if (deleteConfirmText.toLowerCase() !== 'nofood') return
     try {
       await fetch(`${API_BASE}/containers/${activeContainerId}`, { method: 'DELETE' })
+      setShowDeleteConfirm(false)
+      setDeleteConfirmText('')
       fetchContainers()
       fetchLastUpdated()
     } catch (error) {
@@ -798,27 +797,55 @@ function App() {
         )}
 
         {/* Delete container option - only at the very bottom */}
-        {activeContainer && containers.length > 1 && (
-          <div style={{
-            marginTop: '30px',
-            padding: '10px 0',
-            borderTop: '1px solid #f0f0f0',
-            textAlign: 'center'
-          }}>
+        {activeContainer && containers.length > 1 && !showDeleteConfirm && (
+          <div style={{ marginTop: '30px', padding: '10px 0', borderTop: '1px solid #f0f0f0', textAlign: 'center' }}>
             <button
-              onClick={handleDeleteContainer}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: '#f44336',
-                fontSize: '12px',
-                cursor: 'pointer',
-                textDecoration: 'underline',
-                opacity: '0.7'
-              }}
+              onClick={() => { setShowDeleteConfirm(true); setDeleteConfirmText('') }}
+              style={{ background: 'transparent', border: 'none', color: '#f44336', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline', opacity: '0.7' }}
             >
               Delete {getContainerDisplayName(activeContainer)}
             </button>
+          </div>
+        )}
+        {showDeleteConfirm && activeContainer && (
+          <div style={{
+            marginTop: '20px', padding: '16px', background: '#fff5f5', border: '1.5px solid #f4433640',
+            borderRadius: '12px', textAlign: 'center'
+          }}>
+            <p style={{ fontSize: '14px', color: '#333', marginBottom: '4px', fontWeight: 600 }}>
+              Delete {getContainerDisplayName(activeContainer)} and all its items?
+            </p>
+            <p style={{ fontSize: '12px', color: '#999', marginBottom: '12px' }}>
+              Type <strong style={{ color: '#f44336', fontFamily: 'monospace' }}>nofood</strong> to confirm
+            </p>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleDeleteContainer() }}
+                placeholder="nofood"
+                autoFocus
+                style={{
+                  width: '120px', padding: '8px 12px', textAlign: 'center', fontSize: '15px',
+                  border: '1.5px solid #ddd', borderRadius: '8px', fontFamily: 'monospace',
+                  outline: 'none',
+                }}
+              />
+              <button
+                onClick={handleDeleteContainer}
+                disabled={deleteConfirmText.toLowerCase() !== 'nofood'}
+                style={{
+                  padding: '8px 16px', fontSize: '13px', fontWeight: 600, borderRadius: '8px', border: 'none', cursor: deleteConfirmText.toLowerCase() === 'nofood' ? 'pointer' : 'not-allowed',
+                  background: deleteConfirmText.toLowerCase() === 'nofood' ? '#f44336' : '#ccc',
+                  color: '#fff',
+                }}
+              >Delete</button>
+              <button
+                onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText('') }}
+                style={{ padding: '8px 16px', fontSize: '13px', fontWeight: 600, borderRadius: '8px', border: 'none', background: '#e0e0e0', color: '#666', cursor: 'pointer' }}
+              >Cancel</button>
+            </div>
           </div>
         )}
 
