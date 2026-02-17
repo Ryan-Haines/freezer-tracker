@@ -1,7 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 
 const API_BASE = '/api'
-const FREEZER_VOLUME_CUBIC_IN = 33 * 20 * 34
+// Freezer dimensions in inches (W x D x H) — override via env vars
+const FREEZER_W = parseInt(import.meta.env.VITE_FREEZER_W || '33', 10)
+const FREEZER_D = parseInt(import.meta.env.VITE_FREEZER_D || '20', 10)
+const FREEZER_H = parseInt(import.meta.env.VITE_FREEZER_H || '34', 10)
+const FREEZER_VOLUME_CUBIC_IN = FREEZER_W * FREEZER_D * FREEZER_H
 const VOLUME_ESTIMATES = { lbs: 245, g: 0.15, gallon: 315, count: 350 }
 const SWIPE_THRESHOLD = 60
 const SWIPE_MAX = 140

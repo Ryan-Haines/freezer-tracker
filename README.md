@@ -31,11 +31,15 @@ That's it. The database is created automatically on first run with some seed dat
 
 ### Freezer Dimensions
 
-Edit the constants in `frontend/src/App.jsx`:
+Set your freezer dimensions (in inches) in `.env`:
 
-```js
-const FREEZER_VOLUME_CUBIC_IN = 33 * 20 * 34 // width × depth × height in inches
+```bash
+VITE_FREEZER_W=33
+VITE_FREEZER_D=20
+VITE_FREEZER_H=34
 ```
+
+Defaults to 33 × 20 × 34 if not set. Rebuild the frontend container after changing.
 
 ### Volume Estimates
 
