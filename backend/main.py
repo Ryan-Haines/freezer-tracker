@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, desc
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, desc, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from pydantic import BaseModel
@@ -296,6 +296,17 @@ def get_last_updated(db: Session = Depends(get_db)):
 
 @app.post("/api/items", response_model=ItemResponse)
 def create_item(item: ItemCreate, db: Session = Depends(get_db)):
+    # Case-insensitive duplicate check — merge quantities if match found
+    existing = db.query(FreezerItem).filter(
+        func.lower(FreezerItem.name) == item.name.strip().lower()
+    ).first()
+    if existing:
+        existing.quantity += item.quantity
+        db.commit()
+        db.refresh(existing)
+        update_inventory_timestamp(db)
+        return existing
+
     db_item = FreezerItem(**item.model_dump())
     db.add(db_item)
     db.commit()
@@ -351,6 +362,17 @@ async def parse_natural_input(input_data: NaturalInput, db: Session = Depends(ge
 
     if parsed is None:
         parsed = parse_with_regex(input_data.text)
+
+    # Case-insensitive duplicate check — merge quantities if match found
+    existing = db.query(FreezerItem).filter(
+        func.lower(FreezerItem.name) == parsed["name"].strip().lower()
+    ).first()
+    if existing:
+        existing.quantity += float(parsed["quantity"])
+        db.commit()
+        db.refresh(existing)
+        update_inventory_timestamp(db)
+        return existing
 
     db_item = FreezerItem(
         name=parsed["name"],
