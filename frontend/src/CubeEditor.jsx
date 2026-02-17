@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
 const MIN_DIM = 4, MAX_DIM = 72
 const SCALE = 0.04 // inches to 3D units
-const HANDLE_RADIUS = 0.18
+const HANDLE_RADIUS = 0.35
 const COLORS = { width: 0xe53935, depth: 0x43a047, height: 0x1e88e5 }
 const COLOR_HEX = { width: '#e53935', depth: '#43a047', height: '#1e88e5' }
 
@@ -254,10 +254,13 @@ export default function CubeEditor({ width, depth, height, onChange, onClose, on
         {/* Header */}
         <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid #f0f0f0' }}>
           <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 600 }}>Set Dimensions</h3>
-          <div style={{ display: 'flex', gap: '16px', marginTop: '8px', fontSize: '14px' }}>
+          <div style={{ display: 'flex', gap: '16px', marginTop: '8px', fontSize: '14px', alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ color: COLOR_HEX.width }}>● W: {dims.width}"</span>
             <span style={{ color: COLOR_HEX.depth }}>● D: {dims.depth}"</span>
             <span style={{ color: COLOR_HEX.height }}>● H: {dims.height}"</span>
+            <span style={{ marginLeft: 'auto', background: '#f0f7ff', padding: '3px 10px', borderRadius: '12px', fontSize: '13px', fontWeight: 600, color: '#1e88e5' }}>
+              {((dims.width * dims.depth * dims.height) / 1728).toFixed(1)} ft³
+            </span>
           </div>
           <div style={{ fontSize: '11px', color: '#aaa', marginTop: '4px' }}>Drag the colored handles to resize • Drag background to orbit</div>
         </div>
