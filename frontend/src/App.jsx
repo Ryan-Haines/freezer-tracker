@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, Component } from 'react'
+import CubeEditor from './CubeEditor'
 
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null } }
@@ -126,6 +127,10 @@ function App() {
   // Container management state
   const [showAddContainer, setShowAddContainer] = useState(false)
   const [newContainer, setNewContainer] = useState({ name: '', icon: '', width: DEFAULT_W, depth: DEFAULT_D, height: DEFAULT_H })
+  
+  // Cube editor state
+  const [showCubeEditor, setShowCubeEditor] = useState(false)
+  const [cubeEditorTarget, setCubeEditorTarget] = useState(null) // null = new container, container id = editing existing
   
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false)
@@ -513,19 +518,17 @@ function App() {
               />
             </div>
             <div style={{ marginBottom: '8px' }}>
-              <span style={{ fontSize: '12px', color: '#888', fontWeight: 500 }}>Dimensions (inches): W × D × H</span>
-              <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '4px' }}>
-                <input type="number" min="1" placeholder="W" value={newContainer.width}
-                  onChange={(e) => setNewContainer({ ...newContainer, width: e.target.value })}
-                  style={{ flex: 1, padding: '6px 8px', border: '1.5px solid #ddd', borderRadius: '6px', fontSize: '14px', textAlign: 'center' }} />
-                <span style={{ color: '#aaa' }}>×</span>
-                <input type="number" min="1" placeholder="D" value={newContainer.depth}
-                  onChange={(e) => setNewContainer({ ...newContainer, depth: e.target.value })}
-                  style={{ flex: 1, padding: '6px 8px', border: '1.5px solid #ddd', borderRadius: '6px', fontSize: '14px', textAlign: 'center' }} />
-                <span style={{ color: '#aaa' }}>×</span>
-                <input type="number" min="1" placeholder="H" value={newContainer.height}
-                  onChange={(e) => setNewContainer({ ...newContainer, height: e.target.value })}
-                  style={{ flex: 1, padding: '6px 8px', border: '1.5px solid #ddd', borderRadius: '6px', fontSize: '14px', textAlign: 'center' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => { setCubeEditorTarget(null); setShowCubeEditor(true) }}
+                  style={{
+                    padding: '8px 14px', background: '#e8f4fd', color: '#2196F3',
+                    border: '1.5px solid #2196F3', borderRadius: '8px', fontSize: '13px',
+                    fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'
+                  }}
+                >📦 Set Dimensions</button>
+                <span style={{ fontSize: '14px', color: '#666', fontWeight: 500 }}>{newContainer.width}×{newContainer.depth}×{newContainer.height} in</span>
               </div>
             </div>
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
@@ -594,7 +597,10 @@ function App() {
               {isCalibrated && !editingCapacity && (
                 <button onClick={resetCalibration} style={{ padding: '2px 8px', background: 'transparent', color: '#999', border: '1px solid #ddd', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>Reset</button>
               )}
-              <span style={{ fontSize: '11px', color: '#999' }}>{activeContainer ? `${activeContainer.width}×${activeContainer.depth}×${activeContainer.height}"` : `${DEFAULT_W}×${DEFAULT_D}×${DEFAULT_H}"`}</span>
+              <span
+                onClick={() => { if (activeContainer) { setCubeEditorTarget(activeContainer.id); setShowCubeEditor(true) } }}
+                style={{ fontSize: '11px', color: '#999', cursor: activeContainer ? 'pointer' : 'default', textDecoration: activeContainer ? 'underline dotted' : 'none' }}
+              >{activeContainer ? `${activeContainer.width}×${activeContainer.depth}×${activeContainer.height}"` : `${DEFAULT_W}×${DEFAULT_D}×${DEFAULT_H}"`}</span>
             </div>
           </div>
           <div style={{ height: '6px', background: '#e0e0e0', borderRadius: '3px', overflow: 'hidden' }}>
@@ -790,6 +796,32 @@ function App() {
 
         <div style={{ height: '40px' }} />
       </div>
+
+      {showCubeEditor && (() => {
+        const editingContainer = cubeEditorTarget ? containers.find(c => c.id === cubeEditorTarget) : null
+        const initW = editingContainer ? editingContainer.width : newContainer.width
+        const initD = editingContainer ? editingContainer.depth : newContainer.depth
+        const initH = editingContainer ? editingContainer.height : newContainer.height
+        return (
+          <CubeEditor
+            width={initW} depth={initD} height={initH}
+            onClose={() => setShowCubeEditor(false)}
+            onDone={async (dims) => {
+              if (cubeEditorTarget) {
+                await fetch(`${API_BASE}/containers/${cubeEditorTarget}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ width: dims.width, depth: dims.depth, height: dims.height })
+                })
+                fetchContainers()
+              } else {
+                setNewContainer(prev => ({ ...prev, width: dims.width, depth: dims.depth, height: dims.height }))
+              }
+              setShowCubeEditor(false)
+            }}
+          />
+        )
+      })()}
     </>
   )
 }
