@@ -1,13 +1,16 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+const allowedHosts = process.env.VITE_ALLOWED_HOSTS
+  ? process.env.VITE_ALLOWED_HOSTS.split(',')
+  : []
+
 export default defineConfig({
   plugins: [react()],
   server: {
     host: '0.0.0.0',
     port: 5174,
-    // Add your Tailscale hostname here if accessing over tailnet
-    // allowedHosts: ['your-machine.your-tailnet.ts.net'],
+    allowedHosts,
     proxy: {
       '/api': {
         target: 'http://backend:8001',
