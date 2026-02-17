@@ -1,4 +1,20 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, Component } from 'react'
+
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null } }
+  static getDerivedStateFromError(error) { return { error } }
+  render() {
+    if (this.state.error) return (
+      <div style={{ padding: '40px 20px', textAlign: 'center', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
+        <div style={{ fontSize: '48px', marginBottom: '16px' }}>😵</div>
+        <h2 style={{ marginBottom: '8px', color: '#333' }}>Something broke</h2>
+        <p style={{ color: '#888', fontSize: '14px', marginBottom: '16px' }}>{this.state.error.message}</p>
+        <button onClick={() => window.location.reload()} style={{ padding: '10px 24px', background: '#2196F3', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '15px', cursor: 'pointer' }}>Reload</button>
+      </div>
+    )
+    return this.props.children
+  }
+}
 
 const API_BASE = '/api'
 const DEFAULT_W = 33, DEFAULT_D = 20, DEFAULT_H = 34
@@ -115,6 +131,8 @@ function App() {
   const [isRecording, setIsRecording] = useState(false)
   const [mediaRecorder, setMediaRecorder] = useState(null)
   const [speechRecognition, setSpeechRecognition] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
 
   const getContainerVolume = () => {
     if (!activeContainer) return DEFAULT_W * DEFAULT_D * DEFAULT_H
@@ -145,32 +163,50 @@ function App() {
   const resetCalibration = () => { setCalibration(null); localStorage.removeItem('freezer-calibration') }
 
   const fetchContainers = async () => { 
-    const r = await fetch(`${API_BASE}/containers`)
-    const containersList = await r.json()
-    setContainers(containersList)
-    
-    // Set active container if not set or invalid
-    if (!activeContainerId || !containersList.find(c => c.id === activeContainerId)) {
-      const firstContainer = containersList[0]
-      if (firstContainer) {
-        setActiveContainerId(firstContainer.id)
-        localStorage.setItem('freezer-active-tab', firstContainer.id.toString())
+    try {
+      const r = await fetch(`${API_BASE}/containers`)
+      if (!r.ok) throw new Error(`Failed to load containers (${r.status})`)
+      const containersList = await r.json()
+      setContainers(containersList)
+      
+      // Set active container if not set or invalid
+      if (!activeContainerId || !containersList.find(c => c.id === activeContainerId)) {
+        const firstContainer = containersList[0]
+        if (firstContainer) {
+          setActiveContainerId(firstContainer.id)
+          localStorage.setItem('freezer-active-tab', firstContainer.id.toString())
+        }
       }
+    } catch (err) {
+      console.error('fetchContainers failed:', err)
+      setLoadError(err.message)
     }
   }
   
   const fetchItems = async () => { 
-    const url = activeContainerId ? `${API_BASE}/items?container_id=${activeContainerId}` : `${API_BASE}/items`
-    const r = await fetch(url)
-    setItems(await r.json())
+    try {
+      const url = activeContainerId ? `${API_BASE}/items?container_id=${activeContainerId}` : `${API_BASE}/items`
+      const r = await fetch(url)
+      if (!r.ok) throw new Error(`Failed to load items (${r.status})`)
+      setItems(await r.json())
+    } catch (err) {
+      console.error('fetchItems failed:', err)
+      setLoadError(err.message)
+    }
   }
   
   const fetchLastUpdated = async () => { 
-    const r = await fetch(`${API_BASE}/last-updated`)
-    setLastUpdated((await r.json()).last_updated) 
+    try {
+      const r = await fetch(`${API_BASE}/last-updated`)
+      if (r.ok) setLastUpdated((await r.json()).last_updated)
+    } catch (err) {
+      console.error('fetchLastUpdated failed:', err)
+    }
   }
   
-  useEffect(() => { fetchContainers(); fetchLastUpdated() }, [])
+  useEffect(() => { 
+    Promise.all([fetchContainers(), fetchLastUpdated()]).finally(() => setLoading(false))
+  }, [])
   useEffect(() => { if (activeContainerId) fetchItems() }, [activeContainerId])
 
   const handleNaturalSubmit = async (e) => {
@@ -359,6 +395,28 @@ function App() {
   // Check if Web Speech API is available
   const isVoiceAvailable = ('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window)
   
+  if (loading) return (
+    <>
+      <style>{css}</style>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f5f5f7', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ width: '40px', height: '40px', border: '3px solid #e0e0e0', borderTopColor: '#2196F3', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+        <span style={{ color: '#999', fontSize: '14px' }}>Loading...</span>
+      </div>
+    </>
+  )
+
+  if (loadError) return (
+    <>
+      <style>{css}</style>
+      <div style={{ padding: '40px 20px', textAlign: 'center', minHeight: '100vh', background: '#f5f5f7', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
+        <div style={{ fontSize: '48px' }}>⚠️</div>
+        <h2 style={{ color: '#333', fontSize: '18px' }}>Connection Error</h2>
+        <p style={{ color: '#888', fontSize: '14px' }}>{loadError}</p>
+        <button onClick={() => window.location.reload()} style={{ padding: '10px 24px', background: '#2196F3', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '15px', cursor: 'pointer', marginTop: '8px' }}>Retry</button>
+      </div>
+    </>
+  )
+
   return (
     <>
       <style>{css}</style>
@@ -736,4 +794,8 @@ function App() {
   )
 }
 
-export default App
+function AppWithErrorBoundary() {
+  return <ErrorBoundary><App /></ErrorBoundary>
+}
+
+export default AppWithErrorBoundary
