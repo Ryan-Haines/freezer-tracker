@@ -1,11 +1,11 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, desc, func
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, desc, func, ForeignKey, or_, CheckConstraint, and_, text
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
-from pydantic import BaseModel
+from sqlalchemy.orm import sessionmaker, Session, relationship
+from pydantic import BaseModel, validator
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 import os
 import re
 import json
@@ -46,6 +46,27 @@ PARSE_SYSTEM_PROMPT = (
 )
 
 
+class Container(Base):
+    __tablename__ = "containers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=True)
+    icon = Column(String, nullable=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Constraint: at least one of name or icon must be non-null
+    __table_args__ = (
+        CheckConstraint(
+            or_(name.isnot(None), icon.isnot(None)),
+            name='check_name_or_icon'
+        ),
+    )
+    
+    # Relationship to items
+    items = relationship("FreezerItem", back_populates="container")
+
+
 class FreezerItem(Base):
     __tablename__ = "freezer_items"
 
@@ -55,6 +76,10 @@ class FreezerItem(Base):
     unit = Column(String, nullable=False)
     date_added = Column(DateTime, default=datetime.utcnow)
     last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    container_id = Column(Integer, ForeignKey('containers.id'), nullable=True)
+    
+    # Relationship to container
+    container = relationship("Container", back_populates="items")
 
 
 class InventoryMeta(Base):
@@ -77,20 +102,57 @@ app.add_middleware(
 )
 
 
+class ContainerCreate(BaseModel):
+    name: Optional[str] = None
+    icon: Optional[str] = None
+    sort_order: Optional[int] = 0
+    
+    @validator('name', 'icon')
+    def check_name_or_icon(cls, v, values):
+        if not values.get('name') and not v:
+            raise ValueError('At least one of name or icon must be provided')
+        return v
+
+
+class ContainerUpdate(BaseModel):
+    name: Optional[str] = None
+    icon: Optional[str] = None
+    sort_order: Optional[int] = None
+
+
+class ContainerResponse(BaseModel):
+    id: int
+    name: Optional[str]
+    icon: Optional[str]
+    sort_order: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class ItemCreate(BaseModel):
     name: str
     quantity: float
     unit: str
+    container_id: Optional[int] = None
 
 
 class ItemUpdate(BaseModel):
     name: Optional[str] = None
     quantity: Optional[float] = None
     unit: Optional[str] = None
+    container_id: Optional[int] = None
 
 
 class NaturalInput(BaseModel):
     text: str
+    container_id: Optional[int] = None
+
+
+class BulkParseInput(BaseModel):
+    text: str
+    container_id: int
 
 
 class ItemResponse(BaseModel):
@@ -99,6 +161,7 @@ class ItemResponse(BaseModel):
     quantity: float
     unit: str
     date_added: datetime
+    container_id: Optional[int]
 
     class Config:
         from_attributes = True
@@ -271,6 +334,41 @@ def parse_with_regex(text: str) -> dict:
     return {"name": name, "quantity": quantity, "unit": unit}
 
 
+def migrate_database():
+    """Handle database migrations"""
+    db = SessionLocal()
+    try:
+        # Check if container_id column exists in freezer_items
+        try:
+            db.execute(text("SELECT container_id FROM freezer_items LIMIT 1"))
+        except Exception:
+            logger.info("Adding container_id column to freezer_items table")
+            db.execute(text("ALTER TABLE freezer_items ADD COLUMN container_id INTEGER"))
+            db.commit()
+        
+        # Create default container if none exist and assign existing items to it
+        containers_count = db.query(Container).count()
+        if containers_count == 0:
+            logger.info("No containers found, creating default container")
+            default_container = Container(
+                name="Freezer Inventory",
+                icon="🧊",
+                sort_order=0
+            )
+            db.add(default_container)
+            db.commit()
+            db.refresh(default_container)
+            
+            # Assign all existing items to the default container
+            items_without_container = db.query(FreezerItem).filter(FreezerItem.container_id.is_(None)).all()
+            for item in items_without_container:
+                item.container_id = default_container.id
+            db.commit()
+            logger.info(f"Assigned {len(items_without_container)} existing items to default container")
+    finally:
+        db.close()
+
+
 @app.on_event("startup")
 def startup():
     provider = _get_llm_provider()
@@ -278,11 +376,75 @@ def startup():
     logger.info(f"Natural language parsing: {provider} (model: {model})")
     if provider == "regex":
         logger.info("No LLM configured — using regex fallback. Set OLLAMA_URL, ANTHROPIC_API_KEY, or OPENAI_API_KEY for better parsing.")
+    
+    # Run database migrations
+    migrate_database()
+
+
+# Container endpoints
+@app.get("/api/containers", response_model=List[ContainerResponse])
+def get_containers(db: Session = Depends(get_db)):
+    containers = db.query(Container).order_by(Container.sort_order).all()
+    return containers
+
+
+@app.post("/api/containers", response_model=ContainerResponse)
+def create_container(container: ContainerCreate, db: Session = Depends(get_db)):
+    # Get the next sort_order
+    max_sort = db.query(func.max(Container.sort_order)).scalar() or 0
+    db_container = Container(
+        name=container.name,
+        icon=container.icon,
+        sort_order=container.sort_order if container.sort_order is not None else max_sort + 1
+    )
+    db.add(db_container)
+    db.commit()
+    db.refresh(db_container)
+    return db_container
+
+
+@app.put("/api/containers/{container_id}", response_model=ContainerResponse)
+def update_container(container_id: int, container: ContainerUpdate, db: Session = Depends(get_db)):
+    db_container = db.query(Container).filter(Container.id == container_id).first()
+    if not db_container:
+        raise HTTPException(status_code=404, detail="Container not found")
+    
+    update_data = container.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_container, key, value)
+    
+    db.commit()
+    db.refresh(db_container)
+    return db_container
+
+
+@app.delete("/api/containers/{container_id}")
+def delete_container(container_id: int, db: Session = Depends(get_db)):
+    db_container = db.query(Container).filter(Container.id == container_id).first()
+    if not db_container:
+        raise HTTPException(status_code=404, detail="Container not found")
+    
+    # Check if this is the only container
+    containers_count = db.query(Container).count()
+    if containers_count <= 1:
+        raise HTTPException(status_code=400, detail="Cannot delete the only container")
+    
+    # Delete all items in the container
+    db.query(FreezerItem).filter(FreezerItem.container_id == container_id).delete()
+    
+    # Delete the container
+    db.delete(db_container)
+    db.commit()
+    update_inventory_timestamp(db)
+    return {"message": "Container and all its items deleted"}
 
 
 @app.get("/api/items", response_model=list[ItemResponse])
-def get_items(db: Session = Depends(get_db)):
-    items = db.query(FreezerItem).order_by(desc(FreezerItem.quantity)).all()
+def get_items(container_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
+    query = db.query(FreezerItem)
+    if container_id is not None:
+        query = query.filter(FreezerItem.container_id == container_id)
+    items = query.order_by(desc(FreezerItem.quantity)).all()
     return items
 
 
@@ -296,10 +458,15 @@ def get_last_updated(db: Session = Depends(get_db)):
 
 @app.post("/api/items", response_model=ItemResponse)
 def create_item(item: ItemCreate, db: Session = Depends(get_db)):
-    # Case-insensitive duplicate check — merge quantities if match found
-    existing = db.query(FreezerItem).filter(
-        func.lower(FreezerItem.name) == item.name.strip().lower()
-    ).first()
+    # Case-insensitive duplicate check scoped to the same container — merge quantities if match found
+    query = db.query(FreezerItem).filter(func.lower(FreezerItem.name) == item.name.strip().lower())
+    
+    if item.container_id is not None:
+        query = query.filter(FreezerItem.container_id == item.container_id)
+    else:
+        query = query.filter(FreezerItem.container_id.is_(None))
+    
+    existing = query.first()
     if existing:
         existing.quantity += item.quantity
         db.commit()
@@ -363,10 +530,15 @@ async def parse_natural_input(input_data: NaturalInput, db: Session = Depends(ge
     if parsed is None:
         parsed = parse_with_regex(input_data.text)
 
-    # Case-insensitive duplicate check — merge quantities if match found
-    existing = db.query(FreezerItem).filter(
-        func.lower(FreezerItem.name) == parsed["name"].strip().lower()
-    ).first()
+    # Case-insensitive duplicate check scoped to the same container — merge quantities if match found
+    query = db.query(FreezerItem).filter(func.lower(FreezerItem.name) == parsed["name"].strip().lower())
+    
+    if input_data.container_id is not None:
+        query = query.filter(FreezerItem.container_id == input_data.container_id)
+    else:
+        query = query.filter(FreezerItem.container_id.is_(None))
+    
+    existing = query.first()
     if existing:
         existing.quantity += float(parsed["quantity"])
         db.commit()
@@ -378,9 +550,75 @@ async def parse_natural_input(input_data: NaturalInput, db: Session = Depends(ge
         name=parsed["name"],
         quantity=float(parsed["quantity"]),
         unit=parsed["unit"],
+        container_id=input_data.container_id,
     )
     db.add(db_item)
     db.commit()
     db.refresh(db_item)
     update_inventory_timestamp(db)
     return db_item
+
+
+@app.post("/api/parse-bulk", response_model=List[ItemResponse])
+async def parse_bulk_input(input_data: BulkParseInput, db: Session = Depends(get_db)):
+    """Parse bulk text input, splitting by common delimiters and parsing each chunk"""
+    import re
+    
+    # Split text by newlines, commas, periods, and semicolons
+    chunks = re.split(r'[,.\n;]+', input_data.text.strip())
+    chunks = [chunk.strip() for chunk in chunks if chunk.strip()]
+    
+    results = []
+    provider = _get_llm_provider()
+    
+    for chunk in chunks:
+        try:
+            parsed = None
+            
+            if provider != "regex":
+                try:
+                    if provider == "ollama":
+                        raw = await parse_with_ollama(chunk)
+                    elif provider == "anthropic":
+                        raw = await parse_with_anthropic(chunk)
+                    elif provider == "openai":
+                        raw = await parse_with_openai(chunk)
+                    parsed = validate_parsed(raw)
+                except Exception as e:
+                    logger.warning(f"{provider} parse failed for chunk '{chunk}', falling back to regex: {e}")
+            
+            if parsed is None:
+                parsed = parse_with_regex(chunk)
+            
+            # Case-insensitive duplicate check scoped to the same container
+            query = db.query(FreezerItem).filter(
+                and_(
+                    func.lower(FreezerItem.name) == parsed["name"].strip().lower(),
+                    FreezerItem.container_id == input_data.container_id
+                )
+            )
+            existing = query.first()
+            
+            if existing:
+                existing.quantity += float(parsed["quantity"])
+                db.commit()
+                db.refresh(existing)
+                results.append(existing)
+            else:
+                db_item = FreezerItem(
+                    name=parsed["name"],
+                    quantity=float(parsed["quantity"]),
+                    unit=parsed["unit"],
+                    container_id=input_data.container_id,
+                )
+                db.add(db_item)
+                db.commit()
+                db.refresh(db_item)
+                results.append(db_item)
+                
+        except Exception as e:
+            logger.error(f"Failed to parse chunk '{chunk}': {e}")
+            continue
+    
+    update_inventory_timestamp(db)
+    return results

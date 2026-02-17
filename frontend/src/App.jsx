@@ -89,6 +89,11 @@ function SwipeRow({ children, onEdit, onDelete, disabled }) {
 }
 
 function App() {
+  const [containers, setContainers] = useState([])
+  const [activeContainerId, setActiveContainerId] = useState(() => {
+    const saved = localStorage.getItem('freezer-active-tab')
+    return saved ? parseInt(saved, 10) : null
+  })
   const [items, setItems] = useState([])
   const [lastUpdated, setLastUpdated] = useState(null)
   const [naturalInput, setNaturalInput] = useState('')
@@ -105,6 +110,15 @@ function App() {
   })
   const [editingCapacity, setEditingCapacity] = useState(false)
   const [capacityInput, setCapacityInput] = useState('')
+  
+  // Container management state
+  const [showAddContainer, setShowAddContainer] = useState(false)
+  const [newContainer, setNewContainer] = useState({ name: '', icon: '' })
+  
+  // Voice recording state
+  const [isRecording, setIsRecording] = useState(false)
+  const [mediaRecorder, setMediaRecorder] = useState(null)
+  const [speechRecognition, setSpeechRecognition] = useState(null)
 
   const calculateRawCapacity = () => {
     let total = 0
@@ -130,9 +144,34 @@ function App() {
   }
   const resetCalibration = () => { setCalibration(null); localStorage.removeItem('freezer-calibration') }
 
-  const fetchItems = async () => { const r = await fetch(`${API_BASE}/items`); setItems(await r.json()) }
-  const fetchLastUpdated = async () => { const r = await fetch(`${API_BASE}/last-updated`); setLastUpdated((await r.json()).last_updated) }
-  useEffect(() => { fetchItems(); fetchLastUpdated() }, [])
+  const fetchContainers = async () => { 
+    const r = await fetch(`${API_BASE}/containers`)
+    const containersList = await r.json()
+    setContainers(containersList)
+    
+    // Set active container if not set or invalid
+    if (!activeContainerId || !containersList.find(c => c.id === activeContainerId)) {
+      const firstContainer = containersList[0]
+      if (firstContainer) {
+        setActiveContainerId(firstContainer.id)
+        localStorage.setItem('freezer-active-tab', firstContainer.id.toString())
+      }
+    }
+  }
+  
+  const fetchItems = async () => { 
+    const url = activeContainerId ? `${API_BASE}/items?container_id=${activeContainerId}` : `${API_BASE}/items`
+    const r = await fetch(url)
+    setItems(await r.json())
+  }
+  
+  const fetchLastUpdated = async () => { 
+    const r = await fetch(`${API_BASE}/last-updated`)
+    setLastUpdated((await r.json()).last_updated) 
+  }
+  
+  useEffect(() => { fetchContainers(); fetchLastUpdated() }, [])
+  useEffect(() => { if (activeContainerId) fetchItems() }, [activeContainerId])
 
   const handleNaturalSubmit = async (e) => {
     e.preventDefault()
@@ -141,7 +180,7 @@ function App() {
     try {
       await fetch(`${API_BASE}/parse`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: naturalInput })
+        body: JSON.stringify({ text: naturalInput, container_id: activeContainerId })
       })
       setNaturalInput('')
       fetchItems(); fetchLastUpdated()
@@ -157,8 +196,100 @@ function App() {
   const cancelEdit = () => { setEditingId(null); setEditForm({}) }
   const handleAddNew = async () => {
     if (!newItem.name || !newItem.quantity) return
-    await fetch(`${API_BASE}/items`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...newItem, quantity: parseFloat(newItem.quantity) }) })
+    await fetch(`${API_BASE}/items`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...newItem, quantity: parseFloat(newItem.quantity), container_id: activeContainerId }) })
     setNewItem({ name: '', quantity: '', unit: 'count' }); setShowAddRow(false); fetchItems(); fetchLastUpdated()
+  }
+  
+  // Container management handlers
+  const handleTabClick = (containerId) => {
+    setActiveContainerId(containerId)
+    localStorage.setItem('freezer-active-tab', containerId.toString())
+  }
+  
+  const handleAddContainer = async () => {
+    if (!newContainer.name.trim() && !newContainer.icon.trim()) return
+    try {
+      await fetch(`${API_BASE}/containers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newContainer)
+      })
+      setNewContainer({ name: '', icon: '' })
+      setShowAddContainer(false)
+      fetchContainers()
+    } catch (error) {
+      console.error('Failed to create container:', error)
+    }
+  }
+  
+  const handleDeleteContainer = async () => {
+    const activeContainer = containers.find(c => c.id === activeContainerId)
+    if (!activeContainer || containers.length <= 1) return
+    
+    const containerName = activeContainer.name || activeContainer.icon || 'this container'
+    if (!confirm(`Delete ${containerName} and all its items?`)) return
+    
+    try {
+      await fetch(`${API_BASE}/containers/${activeContainerId}`, { method: 'DELETE' })
+      fetchContainers()
+      fetchLastUpdated()
+    } catch (error) {
+      console.error('Failed to delete container:', error)
+    }
+  }
+  
+  // Voice recording handlers
+  const startVoiceRecording = async () => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      alert('Speech recognition is not supported in this browser')
+      return
+    }
+    
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    const recognition = new SpeechRecognition()
+    
+    recognition.continuous = true
+    recognition.interimResults = false
+    recognition.lang = 'en-US'
+    
+    recognition.onstart = () => setIsRecording(true)
+    recognition.onend = () => setIsRecording(false)
+    recognition.onerror = () => {
+      setIsRecording(false)
+      alert('Speech recognition error occurred')
+    }
+    
+    recognition.onresult = async (event) => {
+      const transcript = Array.from(event.results)
+        .map(result => result[0].transcript)
+        .join(' ')
+        .trim()
+      
+      if (transcript) {
+        try {
+          await fetch(`${API_BASE}/parse-bulk`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: transcript, container_id: activeContainerId })
+          })
+          fetchItems()
+          fetchLastUpdated()
+        } catch (error) {
+          console.error('Failed to process voice input:', error)
+          alert('Failed to process voice input')
+        }
+      }
+    }
+    
+    setSpeechRecognition(recognition)
+    recognition.start()
+  }
+  
+  const stopVoiceRecording = () => {
+    if (speechRecognition) {
+      speechRecognition.stop()
+      setSpeechRecognition(null)
+    }
   }
 
   // Backend stores UTC without Z suffix — normalize before parsing
@@ -207,12 +338,151 @@ function App() {
     body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f5f5f7; color: #1d1d1f; -webkit-font-smoothing: antialiased; }
     input, select, button { font-family: inherit; }
     @keyframes spin { to { transform: rotate(360deg); } }
+    .tab-container::-webkit-scrollbar { display: none; }
+    .tab-container { -ms-overflow-style: none; scrollbar-width: none; }
   `
 
+  // Get active container
+  const activeContainer = containers.find(c => c.id === activeContainerId)
+  const getContainerDisplayName = (container) => {
+    if (container?.name && container?.icon) return `${container.icon} ${container.name}`
+    return container?.name || container?.icon || 'Container'
+  }
+  
+  // Check if Web Speech API is available
+  const isVoiceAvailable = ('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window)
+  
   return (
     <>
       <style>{css}</style>
       <div style={{ maxWidth: '600px', margin: '0 auto', padding: '12px', minHeight: '100vh' }}>
+        {/* Tab Bar */}
+        <div className="tab-container" style={{
+          display: 'flex', 
+          gap: '8px', 
+          marginBottom: '12px', 
+          overflowX: 'auto',
+          paddingBottom: '2px',
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none'
+        }}>
+          {containers.map(container => (
+            <div
+              key={container.id}
+              onClick={() => handleTabClick(container.id)}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '20px',
+                background: container.id === activeContainerId ? '#2196F3' : '#f0f0f0',
+                color: container.id === activeContainerId ? '#fff' : '#666',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+                border: container.id === activeContainerId ? '2px solid #2196F3' : '2px solid transparent',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              {getContainerDisplayName(container)}
+            </div>
+          ))}
+          
+          {/* Add container button */}
+          <div
+            onClick={() => setShowAddContainer(true)}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '20px',
+              background: '#e8f4fd',
+              color: '#2196F3',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              border: '2px dashed #2196F3',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            + Add
+          </div>
+        </div>
+        
+        {/* Add container form */}
+        {showAddContainer && (
+          <div style={{
+            padding: '12px',
+            background: '#f8f9fa',
+            borderRadius: '10px',
+            marginBottom: '12px',
+            border: '1.5px solid #e0e0e0'
+          }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
+              <input
+                type="text"
+                placeholder="Container name"
+                value={newContainer.name}
+                onChange={(e) => setNewContainer({ ...newContainer, name: e.target.value })}
+                style={{
+                  flex: 1,
+                  padding: '6px 10px',
+                  border: '1.5px solid #ddd',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+              />
+              <input
+                type="text"
+                placeholder="🧊"
+                value={newContainer.icon}
+                onChange={(e) => setNewContainer({ ...newContainer, icon: e.target.value })}
+                style={{
+                  width: '60px',
+                  padding: '6px 10px',
+                  border: '1.5px solid #ddd',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  textAlign: 'center'
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={handleAddContainer}
+                disabled={!newContainer.name.trim() && !newContainer.icon.trim()}
+                style={{
+                  padding: '6px 14px',
+                  background: (!newContainer.name.trim() && !newContainer.icon.trim()) ? '#ccc' : '#4CAF50',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: (!newContainer.name.trim() && !newContainer.icon.trim()) ? 'not-allowed' : 'pointer'
+                }}
+              >
+                Create
+              </button>
+              <button
+                onClick={() => setShowAddContainer(false)}
+                style={{
+                  padding: '6px 14px',
+                  background: '#e0e0e0',
+                  color: '#666',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+        
         {/* Capacity */}
         <div style={{
           padding: '12px 16px', borderRadius: '12px', marginBottom: '12px',
@@ -252,9 +522,66 @@ function App() {
         </div>
 
         {/* Title */}
-        <h1 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '2px' }}>🧊 Freezer Inventory</h1>
+        <h1 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '2px' }}>
+          {activeContainer ? getContainerDisplayName(activeContainer) : '🧊 Freezer Inventory'}
+        </h1>
         <p style={{ color: '#999', fontSize: '12px', marginBottom: '12px' }}>Updated {formatDateTime(lastUpdated)}</p>
 
+        {/* Voice fill button - only when container is empty */}
+        {items.length === 0 && isVoiceAvailable && activeContainer && (
+          <div style={{ marginBottom: '12px' }}>
+            {!isRecording ? (
+              <button
+                onClick={startVoiceRecording}
+                style={{
+                  width: '100%',
+                  padding: '16px',
+                  background: '#4CAF50',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px'
+                }}
+              >
+                🎤 Fill {getContainerDisplayName(activeContainer)} with items
+              </button>
+            ) : (
+              <button
+                onClick={stopVoiceRecording}
+                style={{
+                  width: '100%',
+                  padding: '16px',
+                  background: '#f44336',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px'
+                }}
+              >
+                <div style={{
+                  width: '12px',
+                  height: '12px',
+                  background: '#fff',
+                  borderRadius: '2px'
+                }} />
+                Recording... (tap to stop)
+              </button>
+            )}
+          </div>
+        )}
+        
         {/* Natural language input */}
         <form onSubmit={handleNaturalSubmit} style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
           <input type="text" value={naturalInput} onChange={e => setNaturalInput(e.target.value)}
@@ -353,6 +680,31 @@ function App() {
             borderRadius: '10px', color: '#aaa', fontSize: '13px',
             cursor: 'pointer',
           }}>+ Add New Row</button>
+        )}
+
+        {/* Delete container option - only at the very bottom */}
+        {activeContainer && containers.length > 1 && (
+          <div style={{
+            marginTop: '30px',
+            padding: '10px 0',
+            borderTop: '1px solid #f0f0f0',
+            textAlign: 'center'
+          }}>
+            <button
+              onClick={handleDeleteContainer}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#f44336',
+                fontSize: '12px',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+                opacity: '0.7'
+              }}
+            >
+              Delete {getContainerDisplayName(activeContainer)}
+            </button>
+          </div>
         )}
 
         <div style={{ height: '40px' }} />
