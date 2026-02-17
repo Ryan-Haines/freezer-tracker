@@ -16,6 +16,7 @@ Built with FastAPI + React + SQLite, fully containerized with Docker.
 ```bash
 git clone https://github.com/Ryan-Haines/freezer-tracker.git
 cd freezer-tracker
+cp .env.example .env   # optional: add an API key for LLM-powered natural language parsing
 docker compose up -d --build
 ```
 
@@ -46,6 +47,20 @@ const VOLUME_ESTIMATES = {
   count: 350,
 }
 ```
+
+### Natural Language Parsing
+
+By default, the natural language input uses regex parsing. For much better results, add an LLM API key to `.env`:
+
+```bash
+# Anthropic (recommended)
+ANTHROPIC_API_KEY=sk-ant-...
+
+# OR OpenAI
+OPENAI_API_KEY=sk-...
+```
+
+With an LLM, inputs like "about three and a half pounds of frozen shrimp from costco" parse correctly. Without one, stick to structured inputs like "3.5 lbs shrimp".
 
 Or just use the built-in calibration — click the capacity percentage in the UI and enter what you think the real value is. It scales from there.
 

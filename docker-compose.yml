@@ -7,6 +7,9 @@ services:
       - "8001:8001"
     volumes:
       - ./data:/app/data
+    env_file:
+      - path: .env
+        required: false
     environment:
       - DATABASE_URL=sqlite:///./data/freezer.db
 
