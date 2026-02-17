@@ -157,7 +157,13 @@ function App() {
     setNewItem({ name: '', quantity: '', unit: 'count' }); setShowAddRow(false); fetchItems(); fetchLastUpdated()
   }
 
-  const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''
+  const formatDate = (d) => {
+    if (!d) return ''
+    const date = new Date(d)
+    const month = date.toLocaleDateString('en-US', { month: 'short' })
+    const year = String(date.getFullYear()).slice(-2)
+    return `${month} '${year}`
+  }
   const formatDateTime = (d) => d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Never'
 
   const getCapacityColor = () => {
