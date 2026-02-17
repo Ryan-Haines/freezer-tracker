@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Depends, Query, UploadFile, File
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, desc, func, ForeignKey, or_, CheckConstraint, and_, text
 from sqlalchemy.ext.declarative import declarative_base
@@ -11,6 +12,8 @@ import re
 import json
 import logging
 import httpx
+import shutil
+import glob
 
 logger = logging.getLogger("freezer-tracker")
 
@@ -22,6 +25,16 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
 LLM_MODEL = os.getenv("LLM_MODEL", "")
 
 VALID_UNITS = {"lbs", "g", "gallon", "count"}
+
+# Default container dimensions in inches
+DEFAULT_WIDTH = 33
+DEFAULT_DEPTH = 20
+DEFAULT_HEIGHT = 34
+
+# Backup settings
+DB_PATH = DATABASE_URL.replace("sqlite:///./", "./")
+BACKUP_DIR = os.path.join(os.path.dirname(DB_PATH), "backups")
+MAX_BACKUPS = 10
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -53,6 +66,9 @@ class Container(Base):
     name = Column(String, nullable=True)
     icon = Column(String, nullable=True)
     sort_order = Column(Integer, nullable=False, default=0)
+    width = Column(Integer, nullable=False, default=DEFAULT_WIDTH)
+    depth = Column(Integer, nullable=False, default=DEFAULT_DEPTH)
+    height = Column(Integer, nullable=False, default=DEFAULT_HEIGHT)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Constraint: at least one of name or icon must be non-null
@@ -106,6 +122,9 @@ class ContainerCreate(BaseModel):
     name: Optional[str] = None
     icon: Optional[str] = None
     sort_order: Optional[int] = 0
+    width: int = DEFAULT_WIDTH
+    depth: int = DEFAULT_DEPTH
+    height: int = DEFAULT_HEIGHT
     
     @validator('name', 'icon')
     def check_name_or_icon(cls, v, values):
@@ -118,6 +137,9 @@ class ContainerUpdate(BaseModel):
     name: Optional[str] = None
     icon: Optional[str] = None
     sort_order: Optional[int] = None
+    width: Optional[int] = None
+    depth: Optional[int] = None
+    height: Optional[int] = None
 
 
 class ContainerResponse(BaseModel):
@@ -125,6 +147,9 @@ class ContainerResponse(BaseModel):
     name: Optional[str]
     icon: Optional[str]
     sort_order: int
+    width: int
+    depth: int
+    height: int
     created_at: datetime
 
     class Config:
@@ -334,16 +359,82 @@ def parse_with_regex(text: str) -> dict:
     return {"name": name, "quantity": quantity, "unit": unit}
 
 
-def migrate_database():
-    """Handle database migrations"""
-    db = SessionLocal()
+def backup_database(reason: str = "migration") -> Optional[str]:
+    """Create a timestamped backup of the database. Returns backup path or None."""
     try:
-        # Check if container_id column exists in freezer_items
-        try:
-            db.execute(text("SELECT container_id FROM freezer_items LIMIT 1"))
-        except Exception:
-            logger.info("Adding container_id column to freezer_items table")
+        os.makedirs(BACKUP_DIR, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        backup_path = os.path.join(BACKUP_DIR, f"freezer-{timestamp}-{reason}.db")
+        shutil.copy2(DB_PATH, backup_path)
+        logger.info(f"Database backed up to {backup_path}")
+        
+        # Prune old backups beyond MAX_BACKUPS
+        backups = sorted(glob.glob(os.path.join(BACKUP_DIR, "freezer-*.db")))
+        while len(backups) > MAX_BACKUPS:
+            oldest = backups.pop(0)
+            os.remove(oldest)
+            logger.info(f"Pruned old backup: {oldest}")
+        
+        return backup_path
+    except Exception as e:
+        logger.error(f"Backup failed: {e}")
+        return None
+
+
+def restore_database(backup_path: str):
+    """Restore the database from a backup file."""
+    if not os.path.exists(backup_path):
+        raise FileNotFoundError(f"Backup not found: {backup_path}")
+    # Backup current state first
+    backup_database(reason="pre-restore")
+    shutil.copy2(backup_path, DB_PATH)
+    logger.info(f"Database restored from {backup_path}")
+
+
+def _column_exists(db: Session, table: str, column: str) -> bool:
+    """Check if a column exists in a table."""
+    try:
+        result = db.execute(text(f"PRAGMA table_info({table})"))
+        columns = [row[1] for row in result]
+        return column in columns
+    except Exception:
+        return False
+
+
+def migrate_database():
+    """Handle database migrations with automatic backup before changes."""
+    db = SessionLocal()
+    migrations_needed = []
+    
+    try:
+        # Detect what migrations are needed
+        if not _column_exists(db, "freezer_items", "container_id"):
+            migrations_needed.append("add_container_id")
+        
+        if not _column_exists(db, "containers", "width"):
+            migrations_needed.append("add_container_dimensions")
+        
+        # If migrations needed, backup first
+        if migrations_needed:
+            logger.info(f"Migrations needed: {migrations_needed}")
+            backup_path = backup_database(reason="pre-migration")
+            if not backup_path:
+                logger.error("CRITICAL: Backup failed before migration. Aborting migrations.")
+                return
+            logger.info(f"Pre-migration backup created: {backup_path}")
+        
+        # Migration: add container_id to freezer_items
+        if "add_container_id" in migrations_needed:
+            logger.info("Migration: Adding container_id column to freezer_items")
             db.execute(text("ALTER TABLE freezer_items ADD COLUMN container_id INTEGER"))
+            db.commit()
+        
+        # Migration: add dimension columns to containers
+        if "add_container_dimensions" in migrations_needed:
+            logger.info("Migration: Adding dimension columns to containers")
+            db.execute(text(f"ALTER TABLE containers ADD COLUMN width INTEGER NOT NULL DEFAULT {DEFAULT_WIDTH}"))
+            db.execute(text(f"ALTER TABLE containers ADD COLUMN depth INTEGER NOT NULL DEFAULT {DEFAULT_DEPTH}"))
+            db.execute(text(f"ALTER TABLE containers ADD COLUMN height INTEGER NOT NULL DEFAULT {DEFAULT_HEIGHT}"))
             db.commit()
         
         # Create default container if none exist and assign existing items to it
@@ -353,7 +444,10 @@ def migrate_database():
             default_container = Container(
                 name="Freezer Inventory",
                 icon="🧊",
-                sort_order=0
+                sort_order=0,
+                width=DEFAULT_WIDTH,
+                depth=DEFAULT_DEPTH,
+                height=DEFAULT_HEIGHT,
             )
             db.add(default_container)
             db.commit()
@@ -365,6 +459,26 @@ def migrate_database():
                 item.container_id = default_container.id
             db.commit()
             logger.info(f"Assigned {len(items_without_container)} existing items to default container")
+        
+        # Always fix any orphaned items (safety net)
+        orphaned = db.query(FreezerItem).filter(FreezerItem.container_id.is_(None)).count()
+        if orphaned > 0:
+            first_container = db.query(Container).order_by(Container.sort_order).first()
+            if first_container:
+                db.execute(
+                    text("UPDATE freezer_items SET container_id = :cid WHERE container_id IS NULL"),
+                    {"cid": first_container.id}
+                )
+                db.commit()
+                logger.info(f"Fixed {orphaned} orphaned items → container {first_container.id}")
+        
+        if migrations_needed:
+            logger.info("All migrations completed successfully")
+        
+    except Exception as e:
+        logger.error(f"Migration failed: {e}")
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -437,6 +551,53 @@ def delete_container(container_id: int, db: Session = Depends(get_db)):
     db.commit()
     update_inventory_timestamp(db)
     return {"message": "Container and all its items deleted"}
+
+
+# Backup & Restore endpoints
+@app.post("/api/backup")
+def create_backup(reason: str = "manual"):
+    """Create a manual database backup."""
+    path = backup_database(reason=reason)
+    if path:
+        return {"message": "Backup created", "path": os.path.basename(path)}
+    raise HTTPException(status_code=500, detail="Backup failed")
+
+
+@app.get("/api/backups")
+def list_backups():
+    """List available database backups."""
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    backups = sorted(glob.glob(os.path.join(BACKUP_DIR, "freezer-*.db")), reverse=True)
+    return [
+        {
+            "filename": os.path.basename(b),
+            "size_bytes": os.path.getsize(b),
+            "created": datetime.fromtimestamp(os.path.getmtime(b)).isoformat(),
+        }
+        for b in backups
+    ]
+
+
+@app.post("/api/restore/{filename}")
+def restore_from_backup(filename: str):
+    """Restore database from a named backup file."""
+    backup_path = os.path.join(BACKUP_DIR, filename)
+    if not os.path.exists(backup_path) or ".." in filename:
+        raise HTTPException(status_code=404, detail="Backup not found")
+    try:
+        restore_database(backup_path)
+        return {"message": f"Restored from {filename}. Restart the app to apply."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/backup/download")
+def download_backup():
+    """Download the current database as a file."""
+    backup_path = backup_database(reason="download")
+    if backup_path:
+        return FileResponse(backup_path, filename=os.path.basename(backup_path), media_type="application/octet-stream")
+    raise HTTPException(status_code=500, detail="Failed to create backup for download")
 
 
 @app.get("/api/items", response_model=list[ItemResponse])

@@ -1,11 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 
 const API_BASE = '/api'
-// Freezer dimensions in inches (W x D x H) — override via env vars
-const FREEZER_W = parseInt(import.meta.env.VITE_FREEZER_W || '33', 10)
-const FREEZER_D = parseInt(import.meta.env.VITE_FREEZER_D || '20', 10)
-const FREEZER_H = parseInt(import.meta.env.VITE_FREEZER_H || '34', 10)
-const FREEZER_VOLUME_CUBIC_IN = FREEZER_W * FREEZER_D * FREEZER_H
+const DEFAULT_W = 33, DEFAULT_D = 20, DEFAULT_H = 34
 const VOLUME_ESTIMATES = { lbs: 245, g: 0.15, gallon: 315, count: 350 }
 const SWIPE_THRESHOLD = 60
 const SWIPE_MAX = 140
@@ -113,17 +109,21 @@ function App() {
   
   // Container management state
   const [showAddContainer, setShowAddContainer] = useState(false)
-  const [newContainer, setNewContainer] = useState({ name: '', icon: '' })
+  const [newContainer, setNewContainer] = useState({ name: '', icon: '', width: DEFAULT_W, depth: DEFAULT_D, height: DEFAULT_H })
   
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false)
   const [mediaRecorder, setMediaRecorder] = useState(null)
   const [speechRecognition, setSpeechRecognition] = useState(null)
 
+  const getContainerVolume = () => {
+    if (!activeContainer) return DEFAULT_W * DEFAULT_D * DEFAULT_H
+    return (activeContainer.width || DEFAULT_W) * (activeContainer.depth || DEFAULT_D) * (activeContainer.height || DEFAULT_H)
+  }
   const calculateRawCapacity = () => {
     let total = 0
     items.forEach(i => { total += i.quantity * (VOLUME_ESTIMATES[i.unit] || VOLUME_ESTIMATES.count) })
-    return (total / FREEZER_VOLUME_CUBIC_IN) * 100
+    return (total / getContainerVolume()) * 100
   }
   const rawCapacity = calculateRawCapacity()
   const getCalibratedCapacity = () => {
@@ -208,13 +208,20 @@ function App() {
   
   const handleAddContainer = async () => {
     if (!newContainer.name.trim() && !newContainer.icon.trim()) return
+    if (!newContainer.width || !newContainer.depth || !newContainer.height) return
     try {
       await fetch(`${API_BASE}/containers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newContainer)
+        body: JSON.stringify({
+          name: newContainer.name,
+          icon: newContainer.icon,
+          width: parseInt(newContainer.width, 10),
+          depth: parseInt(newContainer.depth, 10),
+          height: parseInt(newContainer.height, 10),
+        })
       })
-      setNewContainer({ name: '', icon: '' })
+      setNewContainer({ name: '', icon: '', width: DEFAULT_W, depth: DEFAULT_D, height: DEFAULT_H })
       setShowAddContainer(false)
       fetchContainers()
     } catch (error) {
@@ -447,25 +454,41 @@ function App() {
                 }}
               />
             </div>
+            <div style={{ marginBottom: '8px' }}>
+              <span style={{ fontSize: '12px', color: '#888', fontWeight: 500 }}>Dimensions (inches): W × D × H</span>
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '4px' }}>
+                <input type="number" min="1" placeholder="W" value={newContainer.width}
+                  onChange={(e) => setNewContainer({ ...newContainer, width: e.target.value })}
+                  style={{ flex: 1, padding: '6px 8px', border: '1.5px solid #ddd', borderRadius: '6px', fontSize: '14px', textAlign: 'center' }} />
+                <span style={{ color: '#aaa' }}>×</span>
+                <input type="number" min="1" placeholder="D" value={newContainer.depth}
+                  onChange={(e) => setNewContainer({ ...newContainer, depth: e.target.value })}
+                  style={{ flex: 1, padding: '6px 8px', border: '1.5px solid #ddd', borderRadius: '6px', fontSize: '14px', textAlign: 'center' }} />
+                <span style={{ color: '#aaa' }}>×</span>
+                <input type="number" min="1" placeholder="H" value={newContainer.height}
+                  onChange={(e) => setNewContainer({ ...newContainer, height: e.target.value })}
+                  style={{ flex: 1, padding: '6px 8px', border: '1.5px solid #ddd', borderRadius: '6px', fontSize: '14px', textAlign: 'center' }} />
+              </div>
+            </div>
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
               <button
                 onClick={handleAddContainer}
-                disabled={!newContainer.name.trim() && !newContainer.icon.trim()}
+                disabled={(!newContainer.name.trim() && !newContainer.icon.trim()) || !newContainer.width || !newContainer.depth || !newContainer.height}
                 style={{
                   padding: '6px 14px',
-                  background: (!newContainer.name.trim() && !newContainer.icon.trim()) ? '#ccc' : '#4CAF50',
+                  background: ((!newContainer.name.trim() && !newContainer.icon.trim()) || !newContainer.width || !newContainer.depth || !newContainer.height) ? '#ccc' : '#4CAF50',
                   color: '#fff',
                   border: 'none',
                   borderRadius: '6px',
                   fontSize: '13px',
                   fontWeight: '600',
-                  cursor: (!newContainer.name.trim() && !newContainer.icon.trim()) ? 'not-allowed' : 'pointer'
+                  cursor: ((!newContainer.name.trim() && !newContainer.icon.trim()) || !newContainer.width || !newContainer.depth || !newContainer.height) ? 'not-allowed' : 'pointer'
                 }}
               >
                 Create
               </button>
               <button
-                onClick={() => setShowAddContainer(false)}
+                onClick={() => { setShowAddContainer(false); setNewContainer({ name: '', icon: '', width: DEFAULT_W, depth: DEFAULT_D, height: DEFAULT_H }) }}
                 style={{
                   padding: '6px 14px',
                   background: '#e0e0e0',
@@ -513,7 +536,7 @@ function App() {
               {isCalibrated && !editingCapacity && (
                 <button onClick={resetCalibration} style={{ padding: '2px 8px', background: 'transparent', color: '#999', border: '1px solid #ddd', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>Reset</button>
               )}
-              <span style={{ fontSize: '11px', color: '#999' }}>33×20×34"</span>
+              <span style={{ fontSize: '11px', color: '#999' }}>{activeContainer ? `${activeContainer.width}×${activeContainer.depth}×${activeContainer.height}"` : `${DEFAULT_W}×${DEFAULT_D}×${DEFAULT_H}"`}</span>
             </div>
           </div>
           <div style={{ height: '6px', background: '#e0e0e0', borderRadius: '3px', overflow: 'hidden' }}>
