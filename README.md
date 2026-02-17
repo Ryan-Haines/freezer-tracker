@@ -1,5 +1,7 @@
 # 🧊 Freezer Tracker
 
+![Freezer Tracker](preview.jpeg)
+
 A simple, self-hosted freezer inventory app. Track what's in your freezer, add items with natural language, and share access over Tailscale.
 
 Built with FastAPI + React + SQLite, fully containerized with Docker.
