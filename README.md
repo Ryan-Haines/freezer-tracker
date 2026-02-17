@@ -6,7 +6,7 @@ Built with FastAPI + React + SQLite, fully containerized with Docker.
 
 ## Features
 
-- **Natural language input** — type "2 lbs of chicken thighs" and it parses automatically
+- **Natural language input** — type "about three and a half pounds of frozen shrimp" and a local 3B language model (via Ollama) parses it into structured data. No API keys required.
 - **Capacity estimate** — visual progress bar based on freezer dimensions, with manual calibration
 - **Inline editing** — edit items directly in the table
 - **Zero ongoing cost** — runs entirely on your hardware, no cloud services
@@ -50,7 +50,20 @@ const VOLUME_ESTIMATES = {
 
 ### Natural Language Parsing
 
-By default, the natural language input uses regex parsing. For much better results, add an LLM API key to `.env`:
+The recommended setup uses [Ollama](https://ollama.ai) to run a local 3B model — fast (~0.8s), free, and private. Install Ollama, pull a model, and point the app at it:
+
+```bash
+# Install Ollama: https://ollama.ai
+ollama pull llama3.2
+```
+
+Add to `.env`:
+```bash
+OLLAMA_URL=http://host.docker.internal:11434
+OLLAMA_MODEL=llama3.2
+```
+
+Alternatively, you can use a cloud API. Add an API key to `.env`:
 
 ```bash
 # Anthropic (recommended)
