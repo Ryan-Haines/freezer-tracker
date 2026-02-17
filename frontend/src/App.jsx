@@ -157,14 +157,19 @@ function App() {
     setNewItem({ name: '', quantity: '', unit: 'count' }); setShowAddRow(false); fetchItems(); fetchLastUpdated()
   }
 
+  // Backend stores UTC without Z suffix — normalize before parsing
+  const toDate = (d) => d ? new Date(d.endsWith('Z') ? d : d + 'Z') : null
   const formatDate = (d) => {
-    if (!d) return ''
-    const date = new Date(d)
+    const date = toDate(d)
+    if (!date) return ''
     const month = date.toLocaleDateString('en-US', { month: 'short' })
     const year = String(date.getFullYear()).slice(-2)
     return `${month} '${year}`
   }
-  const formatDateTime = (d) => d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Never'
+  const formatDateTime = (d) => {
+    const date = toDate(d)
+    return date ? date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Never'
+  }
 
   const getCapacityColor = () => {
     if (capacityPercent >= 90) return '#f44336'
@@ -182,7 +187,7 @@ function App() {
     let cmp = 0
     if (sortKey === 'name' || sortKey === 'unit') cmp = (a[sortKey] || '').localeCompare(b[sortKey] || '')
     else if (sortKey === 'quantity') cmp = a.quantity - b.quantity
-    else if (sortKey === 'date_added') cmp = new Date(a.date_added || 0) - new Date(b.date_added || 0)
+    else if (sortKey === 'date_added') cmp = (toDate(a.date_added) || 0) - (toDate(b.date_added) || 0)
     return sortAsc ? cmp : -cmp
   })
 
