@@ -42,19 +42,22 @@ Base = declarative_base()
 
 PARSE_SYSTEM_PROMPT = (
     "You parse freezer inventory items. Given natural language, extract: "
-    "name (string), quantity (number), unit (one of: lbs, g, gallon, count). "
-    "Respond with ONLY valid JSON: {\"name\": \"...\", \"quantity\": ..., \"unit\": \"...\"}\n"
+    "name (string), quantity (number), unit (one of: lbs, g, gallon, count), action (one of: add, remove). "
+    "Respond with ONLY valid JSON: {\"name\": \"...\", \"quantity\": ..., \"unit\": \"...\", \"action\": \"...\"}\n"
     "Rules:\n"
     "- quantity must ALWAYS be a number, never null. Default to 1 if unclear.\n"
     "- unit must ALWAYS be one of: lbs, g, gallon, count. Default to 'count' if unclear.\n"
+    "- action: 'remove' if user says take out, took out, remove, removed, used, ate, etc. Otherwise 'add'.\n"
     "- name should be the food item only, strip store names and unnecessary words.\n"
     "Examples:\n"
-    "- \"2 lbs of chicken thighs\" → {\"name\": \"chicken thighs\", \"quantity\": 2, \"unit\": \"lbs\"}\n"
-    "- \"a bag of frozen peas\" → {\"name\": \"frozen peas\", \"quantity\": 1, \"unit\": \"count\"}\n"
-    "- \"500g ground beef\" → {\"name\": \"ground beef\", \"quantity\": 500, \"unit\": \"g\"}\n"
-    "- \"about three and a half pounds of shrimp\" → {\"name\": \"shrimp\", \"quantity\": 3.5, \"unit\": \"lbs\"}\n"
-    "- \"chicken drumsticks\" → {\"name\": \"chicken drumsticks\", \"quantity\": 1, \"unit\": \"count\"}\n"
-    "- \"half gallon of ice cream\" → {\"name\": \"ice cream\", \"quantity\": 0.5, \"unit\": \"gallon\"}\n"
+    "- \"2 lbs of chicken thighs\" → {\"name\": \"chicken thighs\", \"quantity\": 2, \"unit\": \"lbs\", \"action\": \"add\"}\n"
+    "- \"take out 2 taro paste\" → {\"name\": \"taro paste\", \"quantity\": 2, \"unit\": \"count\", \"action\": \"remove\"}\n"
+    "- \"took out 3 shrimps\" → {\"name\": \"shrimp\", \"quantity\": 3, \"unit\": \"count\", \"action\": \"remove\"}\n"
+    "- \"remove 1 lb ground beef\" → {\"name\": \"ground beef\", \"quantity\": 1, \"unit\": \"lbs\", \"action\": \"remove\"}\n"
+    "- \"used half gallon of ice cream\" → {\"name\": \"ice cream\", \"quantity\": 0.5, \"unit\": \"gallon\", \"action\": \"remove\"}\n"
+    "- \"a bag of frozen peas\" → {\"name\": \"frozen peas\", \"quantity\": 1, \"unit\": \"count\", \"action\": \"add\"}\n"
+    "- \"500g ground beef\" → {\"name\": \"ground beef\", \"quantity\": 500, \"unit\": \"g\", \"action\": \"add\"}\n"
+    "- \"chicken drumsticks\" → {\"name\": \"chicken drumsticks\", \"quantity\": 1, \"unit\": \"count\", \"action\": \"add\"}\n"
     "No markdown, no explanation, just JSON."
 )
 
@@ -222,10 +225,11 @@ def _get_llm_provider() -> str:
 
 
 def validate_parsed(raw: dict) -> dict:
-    """Validate and sanitize LLM output. Returns clean {name, quantity, unit} or raises."""
+    """Validate and sanitize LLM output. Returns clean {name, quantity, unit, action} or raises."""
     name = raw.get("name")
     quantity = raw.get("quantity")
     unit = raw.get("unit")
+    action = raw.get("action", "add")
 
     if not name or not isinstance(name, str) or len(name.strip()) == 0:
         raise ValueError("Missing or empty name")
@@ -246,7 +250,11 @@ def validate_parsed(raw: dict) -> dict:
     if not unit or unit == "null" or unit not in VALID_UNITS:
         unit = "count"
 
-    return {"name": name, "quantity": quantity, "unit": unit}
+    # Fix action
+    if action not in ("add", "remove"):
+        action = "add"
+
+    return {"name": name, "quantity": quantity, "unit": unit, "action": action}
 
 
 async def parse_with_ollama(text: str) -> dict:
@@ -321,7 +329,12 @@ async def parse_with_openai(text: str) -> dict:
 
 def parse_with_regex(text: str) -> dict:
     """Fallback regex parser for when no LLM is configured."""
-    text = re.sub(r'^(add|update|set)\s+', '', text.lower().strip())
+    lower = text.lower().strip()
+    action = "add"
+    if re.match(r'^(take\s+out|took\s+out|remove|removed|used|ate|eaten)\s+', lower):
+        action = "remove"
+        lower = re.sub(r'^(take\s+out|took\s+out|remove|removed|used|ate|eaten)\s+', '', lower)
+    text = re.sub(r'^(add|update|set)\s+', '', lower)
 
     patterns = [
         r'(\d+\.?\d*)\s*(lbs?|pounds?|g|grams?|gallon|count)\s+(?:of\s+)?(.+)',
@@ -356,7 +369,7 @@ def parse_with_regex(text: str) -> dict:
                         unit = 'g'
                 break
 
-    return {"name": name, "quantity": quantity, "unit": unit}
+    return {"name": name, "quantity": quantity, "unit": unit, "action": action}
 
 
 def backup_database(reason: str = "migration") -> Optional[str]:
@@ -691,7 +704,9 @@ async def parse_natural_input(input_data: NaturalInput, db: Session = Depends(ge
     if parsed is None:
         parsed = parse_with_regex(input_data.text)
 
-    # Case-insensitive duplicate check scoped to the same container — merge quantities if match found
+    action = parsed.get("action", "add")
+
+    # Case-insensitive duplicate check scoped to the same container
     query = db.query(FreezerItem).filter(func.lower(FreezerItem.name) == parsed["name"].strip().lower())
     
     if input_data.container_id is not None:
@@ -700,6 +715,23 @@ async def parse_natural_input(input_data: NaturalInput, db: Session = Depends(ge
         query = query.filter(FreezerItem.container_id.is_(None))
     
     existing = query.first()
+
+    if action == "remove":
+        if not existing:
+            raise HTTPException(status_code=404, detail=f"Item '{parsed['name']}' not found in inventory")
+        existing.quantity -= float(parsed["quantity"])
+        if existing.quantity <= 0:
+            db.delete(existing)
+            db.commit()
+            update_inventory_timestamp(db)
+            # Return a response with 0 quantity to indicate removal
+            return ItemResponse(id=existing.id, name=existing.name, quantity=0, unit=existing.unit, date_added=existing.date_added, container_id=existing.container_id)
+        db.commit()
+        db.refresh(existing)
+        update_inventory_timestamp(db)
+        return existing
+    
+    # Default: add
     if existing:
         existing.quantity += float(parsed["quantity"])
         db.commit()

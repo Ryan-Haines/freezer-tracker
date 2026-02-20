@@ -6,11 +6,23 @@ class ErrorBoundary extends Component {
   static getDerivedStateFromError(error) { return { error } }
   render() {
     if (this.state.error) return (
-      <div style={{ padding: '40px 20px', textAlign: 'center', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
-        <div style={{ fontSize: '48px', marginBottom: '16px' }}>😵</div>
-        <h2 style={{ marginBottom: '8px', color: '#333' }}>Something broke</h2>
-        <p style={{ color: '#888', fontSize: '14px', marginBottom: '16px' }}>{this.state.error.message}</p>
-        <button onClick={() => window.location.reload()} style={{ padding: '10px 24px', background: '#2196F3', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '15px', cursor: 'pointer' }}>Reload</button>
+      <div style={{ 
+        padding: '40px 20px', textAlign: 'center', 
+        fontFamily: "'Exo 2', monospace",
+        background: 'linear-gradient(135deg, #0d47a1 0%, #1565c0 25%, #1976d2 50%, #42a5f5 100%)',
+        minHeight: '100vh', color: 'white', display: 'flex', flexDirection: 'column', 
+        justifyContent: 'center', alignItems: 'center'
+      }}>
+        <div style={{ fontSize: '64px', marginBottom: '20px', filter: 'drop-shadow(0 4px 12px rgba(13,71,161,0.5))' }}>🧊</div>
+        <h2 style={{ marginBottom: '12px', fontWeight: 600, letterSpacing: '1px', textShadow: '0 2px 8px rgba(13,71,161,0.7)' }}>SYSTEM MALFUNCTION</h2>
+        <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '14px', marginBottom: '20px', fontWeight: 400 }}>{this.state.error.message}</p>
+        <button onClick={() => window.location.reload()} style={{ 
+          padding: '12px 28px', background: 'rgba(255,255,255,0.1)', color: 'white', 
+          border: '2px solid rgba(255,255,255,0.3)', borderRadius: '8px', fontSize: '15px', 
+          cursor: 'pointer', fontFamily: "'Exo 2', monospace", fontWeight: 600, letterSpacing: '0.5px',
+          backdropFilter: 'blur(10px)', transition: 'all 0.3s ease',
+          boxShadow: '0 8px 32px rgba(13,71,161,0.3)'
+        }}>RESTART SYSTEM</button>
       </div>
     )
     return this.props.children
@@ -60,20 +72,22 @@ function SwipeRow({ children, onEdit, onDelete, disabled }) {
   }
 
   return (
-    <div style={{ position: 'relative', overflow: 'hidden', borderBottom: '1px solid #f0f0f0' }}>
+    <div style={{ position: 'relative', overflow: 'hidden', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
       {/* Action buttons behind */}
       <div style={{
         position: 'absolute', right: 0, top: 0, bottom: 0,
         display: 'flex', width: `${SWIPE_MAX}px`,
       }}>
         <button onClick={() => { onEdit(); close() }} style={{
-          flex: 1, border: 'none', color: '#fff', backgroundColor: '#2196F3',
-          fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-        }}>Edit</button>
+          flex: 1, border: 'none', color: '#fff', backgroundColor: '#1565c0',
+          fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: "'Exo 2', monospace",
+          letterSpacing: '0.5px', textShadow: '0 1px 3px rgba(0,0,0,0.3)'
+        }}>EDIT</button>
         <button onClick={() => { onDelete(); close() }} style={{
-          flex: 1, border: 'none', color: '#fff', backgroundColor: '#f44336',
-          fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-        }}>Delete</button>
+          flex: 1, border: 'none', color: '#fff', backgroundColor: '#d32f2f',
+          fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: "'Exo 2', monospace",
+          letterSpacing: '0.5px', textShadow: '0 1px 3px rgba(0,0,0,0.3)'
+        }}>DELETE</button>
       </div>
       {/* Foreground row */}
       <div
@@ -88,7 +102,8 @@ function SwipeRow({ children, onEdit, onDelete, disabled }) {
         style={{
           transform: `translateX(-${offset}px)`,
           transition: transitioning ? 'transform 0.25s ease' : 'none',
-          backgroundColor: '#fff',
+          background: 'rgba(255,255,255,0.05)',
+          backdropFilter: 'blur(20px)',
           position: 'relative',
           zIndex: 1,
           userSelect: swiping.current ? 'none' : 'auto',
@@ -356,10 +371,17 @@ function App() {
   }
 
   const getCapacityColor = () => {
-    if (capacityPercent >= 90) return '#f44336'
-    if (capacityPercent >= 80) return '#ff9800'
-    if (capacityPercent >= 60) return '#4CAF50'
-    return '#2196F3'
+    if (capacityPercent >= 90) return '#d32f2f'
+    if (capacityPercent >= 80) return '#f57c00'
+    if (capacityPercent >= 60) return '#388e3c'
+    return '#1565c0'
+  }
+  
+  const getCapacityGlow = () => {
+    if (capacityPercent >= 90) return '0 0 20px rgba(211,47,47,0.6)'
+    if (capacityPercent >= 80) return '0 0 20px rgba(245,124,0,0.6)'
+    if (capacityPercent >= 60) return '0 0 20px rgba(56,142,60,0.6)'
+    return '0 0 20px rgba(21,101,192,0.6)'
   }
 
   const handleSort = (key) => {
@@ -376,19 +398,119 @@ function App() {
   })
 
   const SortHeader = ({ label, field, style: s }) => (
-    <div onClick={() => handleSort(field)} style={{ ...s, cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
+    <div onClick={() => handleSort(field)} style={{ 
+      ...s, cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', gap: '4px',
+      transition: 'all 0.2s ease', fontFamily: "'Exo 2', monospace"
+    }}>
       {label}
-      {sortKey === field && <span style={{ fontSize: '10px', opacity: 0.7 }}>{sortAsc ? '▲' : '▼'}</span>}
+      {sortKey === field && <span style={{ fontSize: '10px', opacity: 0.8, color: '#64b5f6' }}>{sortAsc ? '▲' : '▼'}</span>}
     </div>
   )
 
+  // Frozen CSS with cold color palette and frost effects
   const css = `
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f5f5f7; color: #1d1d1f; -webkit-font-smoothing: antialiased; }
-    input, select, button { font-family: inherit; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    :root {
+      --frost-primary: #0d47a1;
+      --frost-secondary: #1565c0;
+      --frost-accent: #1976d2;
+      --frost-light: #42a5f5;
+      --frost-pale: #64b5f6;
+      --frost-ice: #e3f2fd;
+      --frost-white: rgba(255, 255, 255, 0.9);
+      --frost-glass: rgba(255, 255, 255, 0.1);
+      --frost-border: rgba(255, 255, 255, 0.2);
+      --frost-shadow: rgba(13, 71, 161, 0.3);
+    }
+    
+    * { 
+      box-sizing: border-box; 
+      margin: 0; 
+      padding: 0; 
+    }
+    
+    body { 
+      font-family: 'Exo 2', monospace; 
+      background: linear-gradient(135deg, var(--frost-primary) 0%, var(--frost-secondary) 25%, var(--frost-accent) 50%, var(--frost-light) 100%);
+      color: var(--frost-white);
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+      position: relative;
+      overflow-x: hidden;
+    }
+    
+    /* Animated frost particles */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+      background-image: 
+        radial-gradient(2px 2px at 20px 30px, rgba(255,255,255,0.4), transparent),
+        radial-gradient(2px 2px at 40px 70px, rgba(255,255,255,0.3), transparent),
+        radial-gradient(1px 1px at 90px 40px, rgba(255,255,255,0.5), transparent),
+        radial-gradient(1px 1px at 130px 80px, rgba(255,255,255,0.4), transparent),
+        radial-gradient(2px 2px at 160px 30px, rgba(255,255,255,0.3), transparent);
+      background-repeat: repeat;
+      background-size: 200px 150px;
+      animation: frost-drift 20s linear infinite;
+    }
+    
+    @keyframes frost-drift {
+      0% { transform: translateY(0px) translateX(0px); }
+      25% { transform: translateY(-10px) translateX(5px); }
+      50% { transform: translateY(-5px) translateX(-5px); }
+      75% { transform: translateY(-15px) translateX(3px); }
+      100% { transform: translateY(-20px) translateX(0px); }
+    }
+    
+    @keyframes frost-glow {
+      0%, 100% { box-shadow: 0 0 20px rgba(100,181,246,0.3); }
+      50% { box-shadow: 0 0 30px rgba(100,181,246,0.6); }
+    }
+    
+    @keyframes ice-shimmer {
+      0% { background-position: -200% center; }
+      100% { background-position: 200% center; }
+    }
+    
+    input, select, button, textarea { 
+      font-family: 'Exo 2', monospace; 
+      letter-spacing: 0.5px;
+    }
+    
+    @keyframes spin { 
+      to { transform: rotate(360deg); } 
+    }
+    
     .tab-container::-webkit-scrollbar { display: none; }
     .tab-container { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    /* Frost glass effect */
+    .frost-glass {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 
+        0 8px 32px rgba(13, 71, 161, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.1);
+    }
+    
+    /* Ice crystal loading spinner */
+    .ice-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top: 3px solid var(--frost-pale);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px var(--frost-shadow);
+    }
   `
 
   const getContainerDisplayName = (container) => {
@@ -402,9 +524,19 @@ function App() {
   if (loading) return (
     <>
       <style>{css}</style>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f5f5f7', flexDirection: 'column', gap: '16px' }}>
-        <div style={{ width: '40px', height: '40px', border: '3px solid #e0e0e0', borderTopColor: '#2196F3', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
-        <span style={{ color: '#999', fontSize: '14px' }}>Loading...</span>
+      <div style={{ 
+        display: 'flex', alignItems: 'center', justifyContent: 'center', 
+        minHeight: '100vh', 
+        background: 'linear-gradient(135deg, var(--frost-primary) 0%, var(--frost-secondary) 25%, var(--frost-accent) 50%, var(--frost-light) 100%)', 
+        flexDirection: 'column', gap: '20px',
+        position: 'relative', zIndex: 2
+      }}>
+        <div className="ice-spinner" />
+        <span style={{ 
+          color: 'rgba(255,255,255,0.9)', fontSize: '16px', fontWeight: 500, 
+          letterSpacing: '1px', textShadow: '0 2px 8px var(--frost-shadow)',
+          fontFamily: "'Exo 2', monospace"
+        }}>LOADING FREEZER DATA...</span>
       </div>
     </>
   )
@@ -412,11 +544,23 @@ function App() {
   if (loadError) return (
     <>
       <style>{css}</style>
-      <div style={{ padding: '40px 20px', textAlign: 'center', minHeight: '100vh', background: '#f5f5f7', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
-        <div style={{ fontSize: '48px' }}>⚠️</div>
-        <h2 style={{ color: '#333', fontSize: '18px' }}>Connection Error</h2>
-        <p style={{ color: '#888', fontSize: '14px' }}>{loadError}</p>
-        <button onClick={() => window.location.reload()} style={{ padding: '10px 24px', background: '#2196F3', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '15px', cursor: 'pointer', marginTop: '8px' }}>Retry</button>
+      <div style={{ 
+        padding: '40px 20px', textAlign: 'center', minHeight: '100vh', 
+        background: 'linear-gradient(135deg, var(--frost-primary) 0%, var(--frost-secondary) 25%, var(--frost-accent) 50%, var(--frost-light) 100%)', 
+        display: 'flex', flexDirection: 'column', alignItems: 'center', 
+        justifyContent: 'center', gap: '16px',
+        position: 'relative', zIndex: 2
+      }}>
+        <div style={{ fontSize: '64px', marginBottom: '8px', filter: 'drop-shadow(0 4px 12px var(--frost-shadow))' }}>❄️</div>
+        <h2 style={{ color: 'var(--frost-white)', fontSize: '20px', fontWeight: 600, letterSpacing: '1px', textShadow: '0 2px 8px var(--frost-shadow)' }}>CONNECTION FROZEN</h2>
+        <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '14px', fontWeight: 400 }}>{loadError}</p>
+        <button onClick={() => window.location.reload()} style={{ 
+          padding: '12px 28px', background: 'var(--frost-glass)', color: 'white', 
+          border: '2px solid var(--frost-border)', borderRadius: '10px', fontSize: '15px', 
+          cursor: 'pointer', marginTop: '12px', fontWeight: 600, letterSpacing: '0.5px',
+          backdropFilter: 'blur(20px)', transition: 'all 0.3s ease',
+          boxShadow: '0 8px 32px var(--frost-shadow)'
+        }}>RECONNECT</button>
       </div>
     </>
   )
@@ -424,12 +568,15 @@ function App() {
   return (
     <>
       <style>{css}</style>
-      <div style={{ maxWidth: '600px', margin: '0 auto', padding: '12px', minHeight: '100vh' }}>
-        {/* Tab Bar */}
+      <div style={{ 
+        maxWidth: '600px', margin: '0 auto', padding: '16px', minHeight: '100vh',
+        position: 'relative', zIndex: 2 
+      }}>
+        {/* Tab Bar - Freezer Drawer Handles */}
         <div className="tab-container" style={{
           display: 'flex', 
           gap: '8px', 
-          marginBottom: '12px', 
+          marginBottom: '16px', 
           overflowX: 'auto',
           paddingBottom: '2px',
           scrollbarWidth: 'none',
@@ -440,19 +587,42 @@ function App() {
               key={container.id}
               onClick={() => handleTabClick(container.id)}
               style={{
-                padding: '8px 16px',
-                borderRadius: '20px',
-                background: container.id === activeContainerId ? '#2196F3' : '#f0f0f0',
-                color: container.id === activeContainerId ? '#fff' : '#666',
+                padding: '10px 18px',
+                borderRadius: '12px 12px 4px 4px',
+                background: container.id === activeContainerId 
+                  ? 'linear-gradient(145deg, rgba(255,255,255,0.2), rgba(255,255,255,0.1))' 
+                  : 'rgba(255,255,255,0.08)',
+                color: container.id === activeContainerId ? '#fff' : 'rgba(255,255,255,0.7)',
                 fontSize: '14px',
-                fontWeight: '500',
+                fontWeight: container.id === activeContainerId ? 700 : 500,
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
                 flexShrink: 0,
-                border: container.id === activeContainerId ? '2px solid #2196F3' : '2px solid transparent',
-                transition: 'all 0.2s ease'
+                border: container.id === activeContainerId 
+                  ? '2px solid rgba(255,255,255,0.3)' 
+                  : '2px solid rgba(255,255,255,0.1)',
+                transition: 'all 0.3s ease',
+                backdropFilter: 'blur(20px)',
+                boxShadow: container.id === activeContainerId 
+                  ? '0 8px 32px var(--frost-shadow), inset 0 1px 0 rgba(255,255,255,0.3)' 
+                  : '0 4px 16px rgba(13,71,161,0.2)',
+                letterSpacing: '0.5px',
+                textShadow: container.id === activeContainerId ? '0 1px 3px rgba(0,0,0,0.3)' : 'none',
+                position: 'relative'
               }}
             >
+              {container.id === activeContainerId && (
+                <div style={{
+                  position: 'absolute',
+                  bottom: '-2px',
+                  left: '10%',
+                  right: '10%',
+                  height: '3px',
+                  background: 'linear-gradient(90deg, transparent, var(--frost-pale), transparent)',
+                  borderRadius: '2px',
+                  boxShadow: '0 0 8px var(--frost-pale)'
+                }} />
+              )}
               {getContainerDisplayName(container)}
             </div>
           ))}
@@ -461,74 +631,96 @@ function App() {
           <div
             onClick={() => setShowAddContainer(true)}
             style={{
-              padding: '8px 16px',
-              borderRadius: '20px',
-              background: '#e8f4fd',
-              color: '#2196F3',
+              padding: '10px 18px',
+              borderRadius: '12px',
+              background: 'rgba(255,255,255,0.05)',
+              color: 'var(--frost-pale)',
               fontSize: '14px',
-              fontWeight: '600',
+              fontWeight: 600,
               cursor: 'pointer',
               whiteSpace: 'nowrap',
               flexShrink: 0,
-              border: '2px dashed #2196F3',
-              transition: 'all 0.2s ease'
+              border: '2px dashed rgba(255,255,255,0.3)',
+              transition: 'all 0.3s ease',
+              backdropFilter: 'blur(20px)',
+              letterSpacing: '0.5px',
+              textShadow: '0 1px 3px rgba(0,0,0,0.3)'
             }}
           >
-            + Add
+            + ADD FREEZER
           </div>
         </div>
         
         {/* Add container form */}
         {showAddContainer && (
-          <div style={{
-            padding: '12px',
-            background: '#f8f9fa',
-            borderRadius: '10px',
-            marginBottom: '12px',
-            border: '1.5px solid #e0e0e0'
+          <div className="frost-glass" style={{
+            padding: '16px',
+            borderRadius: '16px',
+            marginBottom: '16px',
+            position: 'relative'
           }}>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '12px' }}>
               <input
                 type="text"
-                placeholder="Container name"
+                placeholder="Freezer name"
                 value={newContainer.name}
                 onChange={(e) => setNewContainer({ ...newContainer, name: e.target.value })}
                 style={{
                   flex: 1,
-                  padding: '6px 10px',
-                  border: '1.5px solid #ddd',
-                  borderRadius: '6px',
-                  fontSize: '14px'
+                  padding: '8px 12px',
+                  border: '2px solid rgba(255,255,255,0.2)',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  background: 'rgba(255,255,255,0.1)',
+                  color: 'white',
+                  backdropFilter: 'blur(10px)',
+                  outline: 'none',
+                  fontWeight: 500,
+                  letterSpacing: '0.5px'
                 }}
               />
               <input
                 type="text"
-                placeholder="🧊"
+                placeholder="❄️"
                 value={newContainer.icon}
                 onChange={(e) => setNewContainer({ ...newContainer, icon: e.target.value })}
                 style={{
-                  width: '60px',
-                  padding: '6px 10px',
-                  border: '1.5px solid #ddd',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  textAlign: 'center'
+                  width: '70px',
+                  padding: '8px 12px',
+                  border: '2px solid rgba(255,255,255,0.2)',
+                  borderRadius: '8px',
+                  fontSize: '16px',
+                  textAlign: 'center',
+                  background: 'rgba(255,255,255,0.1)',
+                  color: 'white',
+                  backdropFilter: 'blur(10px)',
+                  outline: 'none'
                 }}
               />
             </div>
-            <div style={{ marginBottom: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <div style={{ marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   onClick={() => { setCubeEditorTarget(null); setShowCubeEditor(true) }}
+                  className="frost-glass"
                   style={{
-                    padding: '8px 14px', background: '#e8f4fd', color: '#2196F3',
-                    border: '1.5px solid #2196F3', borderRadius: '8px', fontSize: '13px',
-                    fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'
+                    padding: '10px 16px', 
+                    color: 'var(--frost-pale)',
+                    border: '2px solid rgba(255,255,255,0.2)', 
+                    borderRadius: '10px', 
+                    fontSize: '13px',
+                    fontWeight: 700, 
+                    cursor: 'pointer', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '8px',
+                    letterSpacing: '0.5px',
+                    transition: 'all 0.3s ease'
                   }}
-                >📦 Set Dimensions</button>
-                <span style={{ fontSize: '12px', color: '#999' }}>or</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                >🧊 SET DIMENSIONS</button>
+                <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', fontWeight: 500 }}>or</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <input
                     type="number"
                     min="0.1"
@@ -539,7 +731,6 @@ function App() {
                       const cuft = parseFloat(e.target.value)
                       if (!cuft || cuft <= 0) return
                       const cubicInches = cuft * 1728
-                      // Scale current proportions to match new volume
                       const curVol = newContainer.width * newContainer.depth * newContainer.height
                       const scale = Math.cbrt(cubicInches / (curVol || 1))
                       setNewContainer({
@@ -550,238 +741,637 @@ function App() {
                       })
                     }}
                     style={{
-                      width: '65px', padding: '6px 8px', textAlign: 'center',
-                      border: '1.5px solid #ddd', borderRadius: '6px', fontSize: '14px', fontWeight: 500
+                      width: '70px', 
+                      padding: '8px 10px', 
+                      textAlign: 'center',
+                      border: '2px solid rgba(255,255,255,0.2)', 
+                      borderRadius: '8px', 
+                      fontSize: '14px', 
+                      fontWeight: 600,
+                      background: 'rgba(255,255,255,0.1)',
+                      color: 'white',
+                      backdropFilter: 'blur(10px)',
+                      outline: 'none'
                     }}
                   />
-                  <span style={{ fontSize: '13px', color: '#666', fontWeight: 500 }}>ft³</span>
+                  <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)', fontWeight: 600 }}>ft³</span>
                 </div>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button
                 onClick={handleAddContainer}
                 disabled={(!newContainer.name.trim() && !newContainer.icon.trim()) || !newContainer.width || !newContainer.depth || !newContainer.height}
                 style={{
-                  padding: '6px 14px',
-                  background: ((!newContainer.name.trim() && !newContainer.icon.trim()) || !newContainer.width || !newContainer.depth || !newContainer.height) ? '#ccc' : '#4CAF50',
+                  padding: '8px 16px',
+                  background: ((!newContainer.name.trim() && !newContainer.icon.trim()) || !newContainer.width || !newContainer.depth || !newContainer.height) 
+                    ? 'rgba(255,255,255,0.1)' 
+                    : 'var(--frost-secondary)',
                   color: '#fff',
-                  border: 'none',
-                  borderRadius: '6px',
+                  border: '2px solid rgba(255,255,255,0.2)',
+                  borderRadius: '8px',
                   fontSize: '13px',
-                  fontWeight: '600',
-                  cursor: ((!newContainer.name.trim() && !newContainer.icon.trim()) || !newContainer.width || !newContainer.depth || !newContainer.height) ? 'not-allowed' : 'pointer'
+                  fontWeight: 700,
+                  cursor: ((!newContainer.name.trim() && !newContainer.icon.trim()) || !newContainer.width || !newContainer.depth || !newContainer.height) 
+                    ? 'not-allowed' 
+                    : 'pointer',
+                  letterSpacing: '0.5px',
+                  backdropFilter: 'blur(10px)',
+                  transition: 'all 0.3s ease'
                 }}
               >
-                Create
+                CREATE
               </button>
               <button
                 onClick={() => { setShowAddContainer(false); setNewContainer({ name: '', icon: '', width: DEFAULT_W, depth: DEFAULT_D, height: DEFAULT_H }) }}
                 style={{
-                  padding: '6px 14px',
-                  background: '#e0e0e0',
-                  color: '#666',
-                  border: 'none',
-                  borderRadius: '6px',
+                  padding: '8px 16px',
+                  background: 'rgba(255,255,255,0.05)',
+                  color: 'rgba(255,255,255,0.7)',
+                  border: '2px solid rgba(255,255,255,0.1)',
+                  borderRadius: '8px',
                   fontSize: '13px',
-                  fontWeight: '600',
-                  cursor: 'pointer'
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  letterSpacing: '0.5px',
+                  backdropFilter: 'blur(10px)'
                 }}
               >
-                Cancel
+                CANCEL
               </button>
             </div>
           </div>
         )}
         
-        {/* Capacity */}
-        <div style={{
-          padding: '12px 16px', borderRadius: '12px', marginBottom: '12px',
-          background: capacityPercent >= 80 ? '#fff3e0' : '#e8f4fd',
-          border: `1.5px solid ${getCapacityColor()}20`,
+        {/* Ice Gauge Capacity */}
+        <div className="frost-glass" style={{
+          padding: '16px 20px', 
+          borderRadius: '16px', 
+          marginBottom: '16px',
+          position: 'relative',
+          overflow: 'hidden'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '4px' }}>
+          {/* Ice crystal pattern overlay */}
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            opacity: 0.1,
+            backgroundImage: `
+              radial-gradient(circle at 20% 20%, rgba(255,255,255,0.3) 2px, transparent 2px),
+              radial-gradient(circle at 80% 80%, rgba(255,255,255,0.3) 1px, transparent 1px),
+              radial-gradient(circle at 40% 60%, rgba(255,255,255,0.2) 1px, transparent 1px)
+            `,
+            backgroundSize: '30px 30px, 40px 40px, 25px 25px'
+          }} />
+          
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            marginBottom: '12px', 
+            flexWrap: 'wrap', 
+            gap: '6px',
+            position: 'relative',
+            zIndex: 1 
+          }}>
             {editingCapacity ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <input type="number" min="0" max="100" value={capacityInput}
                   onChange={e => setCapacityInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && saveManualCapacity()}
-                  style={{ width: '50px', padding: '4px 8px', fontSize: '15px', border: '1.5px solid #2196F3', borderRadius: '6px', textAlign: 'center' }}
+                  style={{ 
+                    width: '60px', 
+                    padding: '6px 10px', 
+                    fontSize: '16px', 
+                    border: '2px solid var(--frost-pale)', 
+                    borderRadius: '8px', 
+                    textAlign: 'center',
+                    background: 'rgba(255,255,255,0.1)',
+                    color: 'white',
+                    backdropFilter: 'blur(10px)',
+                    outline: 'none',
+                    fontWeight: 700,
+                    boxShadow: '0 0 10px rgba(100,181,246,0.4)'
+                  }}
                   autoFocus />
-                <span style={{ fontWeight: 600 }}>%</span>
-                <button onClick={saveManualCapacity} style={{ padding: '4px 10px', background: '#4CAF50', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>Save</button>
-                <button onClick={() => setEditingCapacity(false)} style={{ padding: '4px 10px', background: '#9e9e9e', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
+                <span style={{ fontWeight: 700, fontSize: '18px', color: 'var(--frost-pale)' }}>%</span>
+                <button onClick={saveManualCapacity} style={{ 
+                  padding: '6px 12px', 
+                  background: 'var(--frost-secondary)', 
+                  color: '#fff', 
+                  border: '2px solid rgba(255,255,255,0.2)', 
+                  borderRadius: '8px', 
+                  fontSize: '13px', 
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                  letterSpacing: '0.5px',
+                  backdropFilter: 'blur(10px)'
+                }}>SAVE</button>
+                <button onClick={() => setEditingCapacity(false)} style={{ 
+                  padding: '6px 12px', 
+                  background: 'rgba(255,255,255,0.1)', 
+                  color: 'rgba(255,255,255,0.7)', 
+                  border: '2px solid rgba(255,255,255,0.1)', 
+                  borderRadius: '8px', 
+                  fontSize: '13px', 
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                  letterSpacing: '0.5px',
+                  backdropFilter: 'blur(10px)'
+                }}>CANCEL</button>
               </div>
             ) : (
               <span onClick={() => { setCapacityInput(capacityPercent.toString()); setEditingCapacity(true) }}
-                style={{ fontSize: '15px', fontWeight: 600, color: getCapacityColor(), cursor: 'pointer' }}>
-                {capacityPercent >= 80 ? '⚠️ ' : '📊 '}
-                {isCalibrated ? 'Calibrated' : 'Est.'}: {capacityPercent}%
+                style={{ 
+                  fontSize: '16px', 
+                  fontWeight: 700, 
+                  color: 'white', 
+                  cursor: 'pointer',
+                  letterSpacing: '0.5px',
+                  textShadow: '0 2px 8px var(--frost-shadow)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                <span style={{ fontSize: '20px' }}>
+                  {capacityPercent >= 90 ? '🔥' : capacityPercent >= 80 ? '⚠️' : '❄️'}
+                </span>
+                {isCalibrated ? 'CALIBRATED' : 'ESTIMATED'}: {capacityPercent}%
                 {isCalibrated && <span style={{ fontSize: '12px', fontWeight: 400, opacity: 0.7 }}> (raw {Math.round(rawCapacity)}%)</span>}
               </span>
             )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               {isCalibrated && !editingCapacity && (
-                <button onClick={resetCalibration} style={{ padding: '2px 8px', background: 'transparent', color: '#999', border: '1px solid #ddd', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>Reset</button>
+                <button onClick={resetCalibration} style={{ 
+                  padding: '4px 10px', 
+                  background: 'transparent', 
+                  color: 'rgba(255,255,255,0.6)', 
+                  border: '1px solid rgba(255,255,255,0.2)', 
+                  borderRadius: '6px', 
+                  fontSize: '11px', 
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  letterSpacing: '0.5px'
+                }}>RESET</button>
               )}
               <span
                 onClick={() => { if (activeContainer) { setCubeEditorTarget(activeContainer.id); setShowCubeEditor(true) } }}
-                style={{ fontSize: '11px', color: '#999', cursor: activeContainer ? 'pointer' : 'default', textDecoration: activeContainer ? 'underline dotted' : 'none' }}
+                style={{ 
+                  fontSize: '11px', 
+                  color: 'rgba(255,255,255,0.7)', 
+                  cursor: activeContainer ? 'pointer' : 'default', 
+                  textDecoration: activeContainer ? 'underline dotted' : 'none',
+                  fontWeight: 600,
+                  letterSpacing: '0.5px'
+                }}
               >{activeContainer ? `${activeContainer.width}×${activeContainer.depth}×${activeContainer.height}"` : `${DEFAULT_W}×${DEFAULT_D}×${DEFAULT_H}"`}</span>
             </div>
           </div>
-          <div style={{ height: '6px', background: '#e0e0e0', borderRadius: '3px', overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${capacityPercent}%`, background: getCapacityColor(), borderRadius: '3px', transition: 'width 0.3s ease' }} />
+          
+          {/* Ice Thermometer/Gauge */}
+          <div style={{ 
+            height: '12px', 
+            background: 'rgba(255,255,255,0.1)', 
+            borderRadius: '6px', 
+            overflow: 'hidden',
+            position: 'relative',
+            border: '1px solid rgba(255,255,255,0.2)',
+            boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.2)'
+          }}>
+            <div style={{ 
+              height: '100%', 
+              width: `${capacityPercent}%`, 
+              background: `linear-gradient(90deg, ${getCapacityColor()}, ${getCapacityColor()}dd)`,
+              borderRadius: '6px', 
+              transition: 'width 0.5s ease',
+              position: 'relative',
+              boxShadow: getCapacityGlow()
+            }}>
+              {/* Ice crystal effect on the fill */}
+              <div style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%)',
+                backgroundSize: '30px 100%',
+                animation: 'ice-shimmer 3s ease-in-out infinite'
+              }} />
+            </div>
+            {/* Temperature markers */}
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: '25%',
+              width: '1px',
+              height: '6px',
+              background: 'rgba(255,255,255,0.3)',
+              transform: 'translateY(-50%)'
+            }} />
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              width: '1px',
+              height: '6px',
+              background: 'rgba(255,255,255,0.3)',
+              transform: 'translateY(-50%)'
+            }} />
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: '75%',
+              width: '1px',
+              height: '6px',
+              background: 'rgba(255,255,255,0.3)',
+              transform: 'translateY(-50%)'
+            }} />
           </div>
         </div>
 
         {/* Title */}
-        <h1 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '2px' }}>
-          {activeContainer ? getContainerDisplayName(activeContainer) : '🧊 Freezer Inventory'}
+        <h1 style={{ 
+          fontSize: '26px', 
+          fontWeight: 800, 
+          marginBottom: '4px',
+          color: 'white',
+          letterSpacing: '1px',
+          textShadow: '0 4px 12px var(--frost-shadow)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px'
+        }}>
+          <span style={{ fontSize: '30px' }}>❄️</span>
+          {activeContainer ? getContainerDisplayName(activeContainer).toUpperCase() : 'FREEZER INVENTORY'}
         </h1>
-        <p style={{ color: '#999', fontSize: '12px', marginBottom: '12px' }}>Updated {formatDateTime(lastUpdated)}</p>
+        <p style={{ 
+          color: 'rgba(255,255,255,0.7)', 
+          fontSize: '12px', 
+          marginBottom: '16px',
+          fontWeight: 500,
+          letterSpacing: '0.5px'
+        }}>LAST SYNC: {formatDateTime(lastUpdated).toUpperCase()}</p>
 
         {/* Voice fill button - only when container is empty */}
         {items.length === 0 && isVoiceAvailable && activeContainer && (
-          <div style={{ marginBottom: '12px' }}>
+          <div style={{ marginBottom: '16px' }}>
             {!isRecording ? (
               <button
                 onClick={startVoiceRecording}
+                className="frost-glass"
                 style={{
                   width: '100%',
-                  padding: '16px',
-                  background: '#4CAF50',
+                  padding: '18px',
                   color: '#fff',
-                  border: 'none',
-                  borderRadius: '12px',
+                  border: '2px solid rgba(255,255,255,0.3)',
+                  borderRadius: '16px',
                   fontSize: '16px',
-                  fontWeight: '600',
+                  fontWeight: 700,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '10px'
+                  gap: '12px',
+                  letterSpacing: '0.5px',
+                  transition: 'all 0.3s ease',
+                  animation: 'frost-glow 2s ease-in-out infinite'
                 }}
               >
-                🎤 Fill {getContainerDisplayName(activeContainer)} with items
+                🎤 VOICE FILL {getContainerDisplayName(activeContainer).toUpperCase()}
               </button>
             ) : (
               <button
                 onClick={stopVoiceRecording}
                 style={{
                   width: '100%',
-                  padding: '16px',
-                  background: '#f44336',
+                  padding: '18px',
+                  background: 'var(--frost-secondary)',
                   color: '#fff',
-                  border: 'none',
-                  borderRadius: '12px',
+                  border: '2px solid rgba(255,255,255,0.4)',
+                  borderRadius: '16px',
                   fontSize: '16px',
-                  fontWeight: '600',
+                  fontWeight: 700,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '10px'
+                  gap: '12px',
+                  letterSpacing: '0.5px',
+                  backdropFilter: 'blur(20px)',
+                  boxShadow: '0 0 20px rgba(211,47,47,0.6)'
                 }}
               >
                 <div style={{
                   width: '12px',
                   height: '12px',
                   background: '#fff',
-                  borderRadius: '2px'
+                  borderRadius: '2px',
+                  animation: 'frost-glow 1s ease-in-out infinite'
                 }} />
-                Recording... (tap to stop)
+                RECORDING... (TAP TO STOP)
               </button>
             )}
           </div>
         )}
         
         {/* Natural language input */}
-        <form onSubmit={handleNaturalSubmit} style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+        <form onSubmit={handleNaturalSubmit} style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
           <input type="text" value={naturalInput} onChange={e => setNaturalInput(e.target.value)}
-            placeholder='e.g. "add 2 lbs chicken"'
+            placeholder='e.g. "2 lbs chicken" or "take out 2 taro paste"'
             disabled={parsing}
+            className="frost-glass"
             style={{
-              flex: 1, padding: '10px 14px', fontSize: '15px',
-              border: '1.5px solid #e0e0e0', borderRadius: '10px',
-              background: '#fff', outline: 'none',
+              flex: 1, 
+              padding: '12px 16px', 
+              fontSize: '15px',
+              border: '2px solid rgba(255,255,255,0.2)', 
+              borderRadius: '12px',
+              color: 'white', 
+              outline: 'none',
               opacity: parsing ? 0.6 : 1,
+              fontWeight: 500,
+              letterSpacing: '0.5px'
             }} />
           <button type="submit" disabled={parsing} style={{
-            padding: '10px 20px', background: parsing ? '#a5d6a7' : '#4CAF50',
-            color: '#fff', border: 'none', borderRadius: '10px', fontSize: '15px',
-            fontWeight: 600, cursor: parsing ? 'not-allowed' : 'pointer',
-            display: 'flex', alignItems: 'center', gap: '6px',
-            minWidth: '70px', justifyContent: 'center',
+            padding: '12px 24px', 
+            background: parsing ? 'rgba(56,142,60,0.6)' : 'var(--frost-secondary)',
+            color: '#fff', 
+            border: '2px solid rgba(255,255,255,0.2)', 
+            borderRadius: '12px', 
+            fontSize: '15px',
+            fontWeight: 700, 
+            cursor: parsing ? 'not-allowed' : 'pointer',
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '8px',
+            minWidth: '80px', 
+            justifyContent: 'center',
+            backdropFilter: 'blur(20px)',
+            letterSpacing: '0.5px',
+            transition: 'all 0.3s ease'
           }}>
             {parsing ? (
-              <span style={{ display: 'inline-block', width: '16px', height: '16px', border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} />
-            ) : 'Add'}
+              <span className="ice-spinner" style={{ width: '18px', height: '18px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff' }} />
+            ) : 'ADD'}
           </button>
         </form>
 
-        {/* Table header */}
-        <div style={{ background: '#f8f8f8', borderRadius: '10px 10px 0 0', display: 'flex', padding: '8px 14px', fontSize: '12px', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #eee' }}>
+        {/* Frozen Table header */}
+        <div className="frost-glass" style={{ 
+          borderRadius: '16px 16px 0 0', 
+          display: 'flex', 
+          padding: '12px 16px', 
+          fontSize: '12px', 
+          fontWeight: 700, 
+          color: 'rgba(255,255,255,0.9)', 
+          textTransform: 'uppercase', 
+          letterSpacing: '1px', 
+          borderBottom: '1px solid rgba(255,255,255,0.1)',
+          border: '2px solid rgba(255,255,255,0.1)',
+          borderBottom: 'none'
+        }}>
           <SortHeader label="Item" field="name" style={{ flex: 2 }} />
           <SortHeader label="Qty" field="quantity" style={{ flex: 1, justifyContent: 'flex-end' }} />
           <SortHeader label="Unit" field="unit" style={{ flex: 1, justifyContent: 'center' }} />
           <SortHeader label="Added" field="date_added" style={{ flex: 1, justifyContent: 'flex-end' }} />
         </div>
 
-        {/* Items */}
-        <div style={{ background: '#fff', borderRadius: '0 0 10px 10px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+        {/* Frozen Items */}
+        <div className="frost-glass" style={{ 
+          borderRadius: '0 0 16px 16px', 
+          overflow: 'hidden',
+          border: '2px solid rgba(255,255,255,0.1)',
+          borderTop: 'none',
+          position: 'relative'
+        }}>
+          {/* Subtle ice pattern overlay */}
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            opacity: 0.05,
+            backgroundImage: `
+              linear-gradient(45deg, transparent 40%, rgba(255,255,255,0.1) 50%, transparent 60%),
+              linear-gradient(-45deg, transparent 40%, rgba(255,255,255,0.1) 50%, transparent 60%)
+            `,
+            backgroundSize: '20px 20px',
+            pointerEvents: 'none'
+          }} />
+          
           {sortedItems.map(item => (
             <SwipeRow key={item.id} onEdit={() => startEditing(item)} onDelete={() => handleDelete(item.id)} disabled={editingId === item.id}>
               {editingId === item.id ? (
-                <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <div style={{ 
+                  padding: '12px 16px', 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  gap: '8px',
+                  position: 'relative',
+                  zIndex: 1
+                }}>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <input value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })}
-                      style={{ flex: 2, padding: '6px 10px', border: '1.5px solid #ddd', borderRadius: '6px', fontSize: '14px' }} />
+                      style={{ 
+                        flex: 2, 
+                        padding: '8px 12px', 
+                        border: '2px solid rgba(255,255,255,0.3)', 
+                        borderRadius: '8px', 
+                        fontSize: '14px',
+                        background: 'rgba(255,255,255,0.1)',
+                        color: 'white',
+                        backdropFilter: 'blur(10px)',
+                        outline: 'none',
+                        fontWeight: 500
+                      }} />
                     <input type="number" step="0.1" value={editForm.quantity}
                       onChange={e => setEditForm({ ...editForm, quantity: parseFloat(e.target.value) })}
-                      style={{ flex: 1, padding: '6px 10px', border: '1.5px solid #ddd', borderRadius: '6px', fontSize: '14px', textAlign: 'right' }} />
+                      style={{ 
+                        flex: 1, 
+                        padding: '8px 12px', 
+                        border: '2px solid rgba(255,255,255,0.3)', 
+                        borderRadius: '8px', 
+                        fontSize: '14px', 
+                        textAlign: 'right',
+                        background: 'rgba(255,255,255,0.1)',
+                        color: 'white',
+                        backdropFilter: 'blur(10px)',
+                        outline: 'none',
+                        fontWeight: 500
+                      }} />
                     <select value={editForm.unit} onChange={e => setEditForm({ ...editForm, unit: e.target.value })}
-                      style={{ flex: 1, padding: '6px', border: '1.5px solid #ddd', borderRadius: '6px', fontSize: '14px', background: '#fff' }}>
-                      <option value="count">count</option>
-                      <option value="lbs">lbs</option>
-                      <option value="g">g</option>
-                      <option value="gallon">gallon</option>
+                      style={{ 
+                        flex: 1, 
+                        padding: '8px', 
+                        border: '2px solid rgba(255,255,255,0.3)', 
+                        borderRadius: '8px', 
+                        fontSize: '14px',
+                        background: 'rgba(255,255,255,0.1)',
+                        color: 'white',
+                        backdropFilter: 'blur(10px)',
+                        outline: 'none',
+                        fontWeight: 500
+                      }}>
+                      <option value="count" style={{background: 'var(--frost-primary)', color: 'white'}}>count</option>
+                      <option value="lbs" style={{background: 'var(--frost-primary)', color: 'white'}}>lbs</option>
+                      <option value="g" style={{background: 'var(--frost-primary)', color: 'white'}}>g</option>
+                      <option value="gallon" style={{background: 'var(--frost-primary)', color: 'white'}}>gallon</option>
                     </select>
                   </div>
-                  <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                    <button onClick={() => saveEdit(item.id)} style={{ padding: '5px 14px', background: '#4CAF50', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>Save</button>
-                    <button onClick={cancelEdit} style={{ padding: '5px 14px', background: '#e0e0e0', color: '#666', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                    <button onClick={() => saveEdit(item.id)} style={{ 
+                      padding: '6px 16px', 
+                      background: 'var(--frost-secondary)', 
+                      color: '#fff', 
+                      border: '2px solid rgba(255,255,255,0.2)', 
+                      borderRadius: '8px', 
+                      fontSize: '13px', 
+                      fontWeight: 700, 
+                      cursor: 'pointer',
+                      letterSpacing: '0.5px',
+                      backdropFilter: 'blur(10px)'
+                    }}>SAVE</button>
+                    <button onClick={cancelEdit} style={{ 
+                      padding: '6px 16px', 
+                      background: 'rgba(255,255,255,0.1)', 
+                      color: 'rgba(255,255,255,0.7)', 
+                      border: '2px solid rgba(255,255,255,0.1)', 
+                      borderRadius: '8px', 
+                      fontSize: '13px', 
+                      fontWeight: 700, 
+                      cursor: 'pointer',
+                      letterSpacing: '0.5px',
+                      backdropFilter: 'blur(10px)'
+                    }}>CANCEL</button>
                   </div>
                 </div>
               ) : (
-                <div style={{ display: 'flex', padding: '10px 14px', alignItems: 'center', fontSize: '14px' }}>
-                  <span style={{ flex: 2, fontWeight: 500 }}>{item.name}</span>
-                  <span style={{ flex: 1, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{item.quantity}</span>
-                  <span style={{ flex: 1, textAlign: 'center', color: '#888', fontSize: '13px' }}>{item.unit}</span>
-                  <span style={{ flex: 1, textAlign: 'right', color: '#aaa', fontSize: '12px' }}>{formatDate(item.date_added)}</span>
+                <div style={{ 
+                  display: 'flex', 
+                  padding: '12px 16px', 
+                  alignItems: 'center', 
+                  fontSize: '14px',
+                  position: 'relative',
+                  zIndex: 1,
+                  color: 'rgba(255,255,255,0.9)'
+                }}>
+                  <span style={{ 
+                    flex: 2, 
+                    fontWeight: 600, 
+                    letterSpacing: '0.3px',
+                    textShadow: '0 1px 2px rgba(0,0,0,0.2)'
+                  }}>{item.name}</span>
+                  <span style={{ 
+                    flex: 1, 
+                    textAlign: 'right', 
+                    fontVariantNumeric: 'tabular-nums',
+                    fontWeight: 700,
+                    color: 'var(--frost-pale)'
+                  }}>{item.quantity}</span>
+                  <span style={{ 
+                    flex: 1, 
+                    textAlign: 'center', 
+                    color: 'rgba(255,255,255,0.7)', 
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    textTransform: 'uppercase'
+                  }}>{item.unit}</span>
+                  <span style={{ 
+                    flex: 1, 
+                    textAlign: 'right', 
+                    color: 'rgba(255,255,255,0.6)', 
+                    fontSize: '12px',
+                    fontWeight: 500
+                  }}>{formatDate(item.date_added)}</span>
                 </div>
               )}
             </SwipeRow>
           ))}
 
           {showAddRow && (
-            <div style={{ padding: '8px 14px', borderTop: '1px solid #f0f0f0' }}>
-              <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '6px' }}>
+            <div style={{ 
+              padding: '12px 16px', 
+              borderTop: '1px solid rgba(255,255,255,0.1)',
+              position: 'relative',
+              zIndex: 1
+            }}>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
                 <input value={newItem.name} onChange={e => setNewItem({ ...newItem, name: e.target.value })} placeholder="Item name"
-                  style={{ flex: 2, padding: '6px 10px', border: '1.5px solid #ddd', borderRadius: '6px', fontSize: '14px' }} />
+                  style={{ 
+                    flex: 2, 
+                    padding: '8px 12px', 
+                    border: '2px solid rgba(255,255,255,0.3)', 
+                    borderRadius: '8px', 
+                    fontSize: '14px',
+                    background: 'rgba(255,255,255,0.1)',
+                    color: 'white',
+                    backdropFilter: 'blur(10px)',
+                    outline: 'none',
+                    fontWeight: 500
+                  }} />
                 <input type="number" step="0.1" value={newItem.quantity} onChange={e => setNewItem({ ...newItem, quantity: e.target.value })} placeholder="Qty"
-                  style={{ flex: 1, padding: '6px 10px', border: '1.5px solid #ddd', borderRadius: '6px', fontSize: '14px', textAlign: 'right' }} />
+                  style={{ 
+                    flex: 1, 
+                    padding: '8px 12px', 
+                    border: '2px solid rgba(255,255,255,0.3)', 
+                    borderRadius: '8px', 
+                    fontSize: '14px', 
+                    textAlign: 'right',
+                    background: 'rgba(255,255,255,0.1)',
+                    color: 'white',
+                    backdropFilter: 'blur(10px)',
+                    outline: 'none',
+                    fontWeight: 500
+                  }} />
                 <select value={newItem.unit} onChange={e => setNewItem({ ...newItem, unit: e.target.value })}
-                  style={{ flex: 1, padding: '6px', border: '1.5px solid #ddd', borderRadius: '6px', fontSize: '14px', background: '#fff' }}>
-                  <option value="count">count</option>
-                  <option value="lbs">lbs</option>
-                  <option value="g">g</option>
-                  <option value="gallon">gallon</option>
+                  style={{ 
+                    flex: 1, 
+                    padding: '8px', 
+                    border: '2px solid rgba(255,255,255,0.3)', 
+                    borderRadius: '8px', 
+                    fontSize: '14px',
+                    background: 'rgba(255,255,255,0.1)',
+                    color: 'white',
+                    backdropFilter: 'blur(10px)',
+                    outline: 'none',
+                    fontWeight: 500
+                  }}>
+                  <option value="count" style={{background: 'var(--frost-primary)', color: 'white'}}>count</option>
+                  <option value="lbs" style={{background: 'var(--frost-primary)', color: 'white'}}>lbs</option>
+                  <option value="g" style={{background: 'var(--frost-primary)', color: 'white'}}>g</option>
+                  <option value="gallon" style={{background: 'var(--frost-primary)', color: 'white'}}>gallon</option>
                 </select>
               </div>
-              <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                <button onClick={handleAddNew} style={{ padding: '5px 14px', background: '#4CAF50', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>Save</button>
-                <button onClick={() => setShowAddRow(false)} style={{ padding: '5px 14px', background: '#e0e0e0', color: '#666', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                <button onClick={handleAddNew} style={{ 
+                  padding: '6px 16px', 
+                  background: 'var(--frost-secondary)', 
+                  color: '#fff', 
+                  border: '2px solid rgba(255,255,255,0.2)', 
+                  borderRadius: '8px', 
+                  fontSize: '13px', 
+                  fontWeight: 700, 
+                  cursor: 'pointer',
+                  letterSpacing: '0.5px',
+                  backdropFilter: 'blur(10px)'
+                }}>SAVE</button>
+                <button onClick={() => setShowAddRow(false)} style={{ 
+                  padding: '6px 16px', 
+                  background: 'rgba(255,255,255,0.1)', 
+                  color: 'rgba(255,255,255,0.7)', 
+                  border: '2px solid rgba(255,255,255,0.1)', 
+                  borderRadius: '8px', 
+                  fontSize: '13px', 
+                  fontWeight: 700, 
+                  cursor: 'pointer',
+                  letterSpacing: '0.5px',
+                  backdropFilter: 'blur(10px)'
+                }}>CANCEL</button>
               </div>
             </div>
           )}
@@ -789,36 +1379,100 @@ function App() {
 
         {!showAddRow && (
           <button onClick={() => setShowAddRow(true)} style={{
-            marginTop: '10px', padding: '8px', width: '100%',
-            background: 'transparent', border: '1.5px dashed #ddd',
-            borderRadius: '10px', color: '#aaa', fontSize: '13px',
+            marginTop: '12px', 
+            padding: '12px', 
+            width: '100%',
+            background: 'rgba(255,255,255,0.05)', 
+            border: '2px dashed rgba(255,255,255,0.3)',
+            borderRadius: '12px', 
+            color: 'rgba(255,255,255,0.7)', 
+            fontSize: '14px',
             cursor: 'pointer',
-          }}>+ Add New Row</button>
+            fontWeight: 600,
+            letterSpacing: '0.5px',
+            backdropFilter: 'blur(10px)',
+            transition: 'all 0.3s ease'
+          }}>+ ADD NEW ITEM</button>
         )}
 
-        {/* Delete container option - only at the very bottom */}
+        {/* Delete container option */}
         {activeContainer && containers.length > 1 && !showDeleteConfirm && (
-          <div style={{ marginTop: '30px', padding: '10px 0', borderTop: '1px solid #f0f0f0', textAlign: 'center' }}>
+          <div style={{ 
+            marginTop: '40px', 
+            padding: '12px 0', 
+            borderTop: '1px solid rgba(255,255,255,0.1)', 
+            textAlign: 'center' 
+          }}>
             <button
               onClick={() => { setShowDeleteConfirm(true); setDeleteConfirmText('') }}
-              style={{ background: 'transparent', border: 'none', color: '#f44336', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline', opacity: '0.7' }}
+              style={{ 
+                background: 'transparent', 
+                border: 'none', 
+                color: 'rgba(211,47,47,0.8)', 
+                fontSize: '13px', 
+                cursor: 'pointer', 
+                textDecoration: 'underline', 
+                opacity: '0.8',
+                fontWeight: 600,
+                letterSpacing: '0.5px'
+              }}
             >
-              Delete {getContainerDisplayName(activeContainer)}
+              DELETE {getContainerDisplayName(activeContainer).toUpperCase()}
             </button>
           </div>
         )}
         {showDeleteConfirm && activeContainer && (
-          <div style={{
-            marginTop: '20px', padding: '16px', background: '#fff5f5', border: '1.5px solid #f4433640',
-            borderRadius: '12px', textAlign: 'center'
+          <div className="frost-glass" style={{
+            marginTop: '24px', 
+            padding: '20px', 
+            borderRadius: '16px', 
+            textAlign: 'center',
+            border: '2px solid rgba(211,47,47,0.3)',
+            position: 'relative'
           }}>
-            <p style={{ fontSize: '14px', color: '#333', marginBottom: '4px', fontWeight: 600 }}>
-              Delete {getContainerDisplayName(activeContainer)} and all its items?
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'radial-gradient(circle, rgba(211,47,47,0.1) 0%, transparent 70%)',
+              borderRadius: '16px',
+              pointerEvents: 'none'
+            }} />
+            <p style={{ 
+              fontSize: '16px', 
+              color: '#fff', 
+              marginBottom: '6px', 
+              fontWeight: 700,
+              position: 'relative',
+              zIndex: 1
+            }}>
+              DELETE {getContainerDisplayName(activeContainer).toUpperCase()} AND ALL ITS ITEMS?
             </p>
-            <p style={{ fontSize: '12px', color: '#999', marginBottom: '12px' }}>
-              Type <strong style={{ color: '#f44336', fontFamily: 'monospace' }}>nofood</strong> to confirm
+            <p style={{ 
+              fontSize: '13px', 
+              color: 'rgba(255,255,255,0.8)', 
+              marginBottom: '16px',
+              position: 'relative',
+              zIndex: 1
+            }}>
+              Type <strong style={{ 
+                color: '#ff6b6b', 
+                fontFamily: 'monospace',
+                background: 'rgba(211,47,47,0.2)',
+                padding: '2px 6px',
+                borderRadius: '4px'
+              }}>nofood</strong> to confirm
             </p>
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
+            <div style={{ 
+              display: 'flex', 
+              gap: '10px', 
+              justifyContent: 'center', 
+              alignItems: 'center',
+              position: 'relative',
+              zIndex: 1
+            }}>
               <input
                 type="text"
                 value={deleteConfirmText}
@@ -827,29 +1481,56 @@ function App() {
                 placeholder="nofood"
                 autoFocus
                 style={{
-                  width: '120px', padding: '8px 12px', textAlign: 'center', fontSize: '15px',
-                  border: '1.5px solid #ddd', borderRadius: '8px', fontFamily: 'monospace',
+                  width: '140px', 
+                  padding: '10px 14px', 
+                  textAlign: 'center', 
+                  fontSize: '15px',
+                  border: '2px solid rgba(255,255,255,0.3)', 
+                  borderRadius: '10px', 
+                  fontFamily: 'monospace',
                   outline: 'none',
+                  background: 'rgba(255,255,255,0.1)',
+                  color: 'white',
+                  backdropFilter: 'blur(10px)',
+                  fontWeight: 600
                 }}
               />
               <button
                 onClick={handleDeleteContainer}
                 disabled={deleteConfirmText.toLowerCase() !== 'nofood'}
                 style={{
-                  padding: '8px 16px', fontSize: '13px', fontWeight: 600, borderRadius: '8px', border: 'none', cursor: deleteConfirmText.toLowerCase() === 'nofood' ? 'pointer' : 'not-allowed',
-                  background: deleteConfirmText.toLowerCase() === 'nofood' ? '#f44336' : '#ccc',
+                  padding: '10px 18px', 
+                  fontSize: '13px', 
+                  fontWeight: 700, 
+                  borderRadius: '10px', 
+                  border: '2px solid rgba(255,255,255,0.2)', 
+                  cursor: deleteConfirmText.toLowerCase() === 'nofood' ? 'pointer' : 'not-allowed',
+                  background: deleteConfirmText.toLowerCase() === 'nofood' ? '#d32f2f' : 'rgba(255,255,255,0.1)',
                   color: '#fff',
+                  backdropFilter: 'blur(10px)',
+                  letterSpacing: '0.5px'
                 }}
-              >Delete</button>
+              >DELETE</button>
               <button
                 onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText('') }}
-                style={{ padding: '8px 16px', fontSize: '13px', fontWeight: 600, borderRadius: '8px', border: 'none', background: '#e0e0e0', color: '#666', cursor: 'pointer' }}
-              >Cancel</button>
+                style={{ 
+                  padding: '10px 18px', 
+                  fontSize: '13px', 
+                  fontWeight: 700, 
+                  borderRadius: '10px', 
+                  border: '2px solid rgba(255,255,255,0.1)', 
+                  background: 'rgba(255,255,255,0.05)', 
+                  color: 'rgba(255,255,255,0.7)', 
+                  cursor: 'pointer',
+                  backdropFilter: 'blur(10px)',
+                  letterSpacing: '0.5px'
+                }}
+              >CANCEL</button>
             </div>
           </div>
         )}
 
-        <div style={{ height: '40px' }} />
+        <div style={{ height: '60px' }} />
       </div>
 
       {showCubeEditor && (() => {
