@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, Query, UploadFile, File
+from fastapi import FastAPI, HTTPException, Depends, Query, UploadFile, File, Body
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, desc, func, ForeignKey, or_, CheckConstraint, and_, text
@@ -14,6 +14,7 @@ import logging
 import httpx
 import shutil
 import glob
+import base64
 
 logger = logging.getLogger("freezer-tracker")
 
@@ -42,22 +43,26 @@ Base = declarative_base()
 
 PARSE_SYSTEM_PROMPT = (
     "You parse freezer inventory items. Given natural language, extract: "
-    "name (string), quantity (number), unit (one of: lbs, g, gallon, count), action (one of: add, remove). "
-    "Respond with ONLY valid JSON: {\"name\": \"...\", \"quantity\": ..., \"unit\": \"...\", \"action\": \"...\"}\n"
+    "name (string), quantity (number), unit (one of: lbs, g, gallon, count), action (one of: add, remove), "
+    "estimated_volume (number, cubic inches per single unit of this item — estimate the physical volume of one unit as it sits in a freezer). "
+    "Respond with ONLY valid JSON: {\"name\": \"...\", \"quantity\": ..., \"unit\": \"...\", \"action\": \"...\", \"estimated_volume\": ...}\n"
     "Rules:\n"
     "- quantity must ALWAYS be a number, never null. Default to 1 if unclear.\n"
     "- unit must ALWAYS be one of: lbs, g, gallon, count. Default to 'count' if unclear.\n"
     "- action: 'remove' if user says take out, took out, remove, removed, used, ate, etc. Otherwise 'add'.\n"
     "- name should be the food item only, strip store names and unnecessary words.\n"
+    "- estimated_volume: cubic inches ONE unit takes up in a freezer. Think about the actual package size.\n"
+    "  Volume guide: frozen pizza ~200, bag of peas ~120, ice cream tub ~230, 1 lb meat ~60, taro paste container ~80, "
+    "  popsicle ~20, frozen burrito ~30, bag of dumplings ~180, frozen meal box ~150, 1 gallon ~231\n"
     "Examples:\n"
-    "- \"2 lbs of chicken thighs\" → {\"name\": \"chicken thighs\", \"quantity\": 2, \"unit\": \"lbs\", \"action\": \"add\"}\n"
-    "- \"take out 2 taro paste\" → {\"name\": \"taro paste\", \"quantity\": 2, \"unit\": \"count\", \"action\": \"remove\"}\n"
-    "- \"took out 3 shrimps\" → {\"name\": \"shrimp\", \"quantity\": 3, \"unit\": \"count\", \"action\": \"remove\"}\n"
-    "- \"remove 1 lb ground beef\" → {\"name\": \"ground beef\", \"quantity\": 1, \"unit\": \"lbs\", \"action\": \"remove\"}\n"
-    "- \"used half gallon of ice cream\" → {\"name\": \"ice cream\", \"quantity\": 0.5, \"unit\": \"gallon\", \"action\": \"remove\"}\n"
-    "- \"a bag of frozen peas\" → {\"name\": \"frozen peas\", \"quantity\": 1, \"unit\": \"count\", \"action\": \"add\"}\n"
-    "- \"500g ground beef\" → {\"name\": \"ground beef\", \"quantity\": 500, \"unit\": \"g\", \"action\": \"add\"}\n"
-    "- \"chicken drumsticks\" → {\"name\": \"chicken drumsticks\", \"quantity\": 1, \"unit\": \"count\", \"action\": \"add\"}\n"
+    "- \"2 lbs of chicken thighs\" → {\"name\": \"chicken thighs\", \"quantity\": 2, \"unit\": \"lbs\", \"action\": \"add\", \"estimated_volume\": 60}\n"
+    "- \"take out 2 taro paste\" → {\"name\": \"taro paste\", \"quantity\": 2, \"unit\": \"count\", \"action\": \"remove\", \"estimated_volume\": 80}\n"
+    "- \"took out 3 shrimps\" → {\"name\": \"shrimp\", \"quantity\": 3, \"unit\": \"count\", \"action\": \"remove\", \"estimated_volume\": 15}\n"
+    "- \"remove 1 lb ground beef\" → {\"name\": \"ground beef\", \"quantity\": 1, \"unit\": \"lbs\", \"action\": \"remove\", \"estimated_volume\": 55}\n"
+    "- \"used half gallon of ice cream\" → {\"name\": \"ice cream\", \"quantity\": 0.5, \"unit\": \"gallon\", \"action\": \"remove\", \"estimated_volume\": 231}\n"
+    "- \"a bag of frozen peas\" → {\"name\": \"frozen peas\", \"quantity\": 1, \"unit\": \"count\", \"action\": \"add\", \"estimated_volume\": 120}\n"
+    "- \"500g ground beef\" → {\"name\": \"ground beef\", \"quantity\": 500, \"unit\": \"g\", \"action\": \"add\", \"estimated_volume\": 0.12}\n"
+    "- \"chicken drumsticks\" → {\"name\": \"chicken drumsticks\", \"quantity\": 1, \"unit\": \"count\", \"action\": \"add\", \"estimated_volume\": 100}\n"
     "No markdown, no explanation, just JSON."
 )
 
@@ -73,6 +78,8 @@ class Container(Base):
     depth = Column(Integer, nullable=False, default=DEFAULT_DEPTH)
     height = Column(Integer, nullable=False, default=DEFAULT_HEIGHT)
     created_at = Column(DateTime, default=datetime.utcnow)
+    calibration_raw = Column(Float, nullable=True)    # raw auto percent when calibrated
+    calibration_actual = Column(Float, nullable=True)  # user-provided actual percent
     
     # Constraint: at least one of name or icon must be non-null
     __table_args__ = (
@@ -96,6 +103,7 @@ class FreezerItem(Base):
     date_added = Column(DateTime, default=datetime.utcnow)
     last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     container_id = Column(Integer, ForeignKey('containers.id'), nullable=True)
+    estimated_volume = Column(Float, nullable=True)  # cubic inches per unit qty
     
     # Relationship to container
     container = relationship("Container", back_populates="items")
@@ -109,6 +117,26 @@ class InventoryMeta(Base):
 
 
 Base.metadata.create_all(bind=engine)
+
+# Migrate: add estimated_volume column if missing
+with engine.connect() as conn:
+    try:
+        conn.execute(text("SELECT estimated_volume FROM freezer_items LIMIT 1"))
+    except Exception:
+        conn.execute(text("ALTER TABLE freezer_items ADD COLUMN estimated_volume FLOAT"))
+        conn.commit()
+
+# Migrate: add calibration columns if missing
+with engine.connect() as conn:
+    try:
+        conn.execute(text("SELECT calibration_raw FROM containers LIMIT 1"))
+    except Exception:
+        conn.execute(text("ALTER TABLE containers ADD COLUMN calibration_raw FLOAT"))
+        conn.execute(text("ALTER TABLE containers ADD COLUMN calibration_actual FLOAT"))
+        conn.commit()
+
+# Default volume estimates (cubic inches per unit qty) for items without LLM estimate
+VOLUME_DEFAULTS = {"lbs": 100, "g": 0.1, "gallon": 231, "count": 150}
 
 app = FastAPI()
 
@@ -254,7 +282,17 @@ def validate_parsed(raw: dict) -> dict:
     if action not in ("add", "remove"):
         action = "add"
 
-    return {"name": name, "quantity": quantity, "unit": unit, "action": action}
+    # Extract estimated_volume
+    ev = raw.get("estimated_volume")
+    if ev is not None:
+        try:
+            ev = float(ev)
+            if ev <= 0:
+                ev = None
+        except (TypeError, ValueError):
+            ev = None
+
+    return {"name": name, "quantity": quantity, "unit": unit, "action": action, "estimated_volume": ev}
 
 
 async def parse_with_ollama(text: str) -> dict:
@@ -566,6 +604,78 @@ def delete_container(container_id: int, db: Session = Depends(get_db)):
     return {"message": "Container and all its items deleted"}
 
 
+@app.get("/api/containers/{container_id}/capacity")
+def get_container_capacity(container_id: int, db: Session = Depends(get_db)):
+    """Calculate how full a container is based on item volumes."""
+    container = db.query(Container).filter(Container.id == container_id).first()
+    if not container:
+        raise HTTPException(status_code=404, detail="Container not found")
+    
+    items = db.query(FreezerItem).filter(FreezerItem.container_id == container_id).all()
+    
+    total_volume = 0.0
+    for item in items:
+        vol_per_unit = item.estimated_volume or VOLUME_DEFAULTS.get(item.unit, 150)
+        total_volume += item.quantity * vol_per_unit
+    
+    w = container.width or 33
+    d = container.depth or 20
+    h = container.height or 34
+    container_volume = w * d * h
+    
+    raw_percent = (total_volume / container_volume) * 100 if container_volume > 0 else 0
+    
+    # Apply calibration if set
+    percent = raw_percent
+    if container.calibration_raw and container.calibration_actual and container.calibration_raw > 0:
+        percent = raw_percent * (container.calibration_actual / container.calibration_raw)
+    percent = min(100, round(percent))
+    
+    return {
+        "total_item_volume": round(total_volume, 1),
+        "container_volume": container_volume,
+        "percent_full": percent,
+        "raw_percent": round(raw_percent),
+        "calibrated": container.calibration_raw is not None
+    }
+
+
+@app.post("/api/containers/{container_id}/calibrate")
+def calibrate_container(container_id: int, body: dict = Body(...), db: Session = Depends(get_db)):
+    """Set calibration: user says the freezer is actually X% full."""
+    container = db.query(Container).filter(Container.id == container_id).first()
+    if not container:
+        raise HTTPException(status_code=404, detail="Container not found")
+    
+    actual = body.get("actual_percent")
+    if actual is None:
+        # Reset calibration
+        container.calibration_raw = None
+        container.calibration_actual = None
+        db.commit()
+        return {"calibration": "reset"}
+    if not (0 <= actual <= 100):
+        raise HTTPException(status_code=400, detail="actual_percent must be 0-100")
+    
+    # Calculate current raw percent
+    items = db.query(FreezerItem).filter(FreezerItem.container_id == container_id).all()
+    total_volume = 0.0
+    for item in items:
+        vol_per_unit = item.estimated_volume or VOLUME_DEFAULTS.get(item.unit, 150)
+        total_volume += item.quantity * vol_per_unit
+    w = container.width or 33
+    d = container.depth or 20
+    h = container.height or 34
+    container_volume = w * d * h
+    raw_percent = (total_volume / container_volume) * 100 if container_volume > 0 else 0
+    
+    container.calibration_raw = raw_percent
+    container.calibration_actual = actual
+    db.commit()
+    
+    return {"raw_percent": round(raw_percent), "calibrated_to": actual}
+
+
 # Backup & Restore endpoints
 @app.post("/api/backup")
 def create_backup(reason: str = "manual"):
@@ -734,22 +844,32 @@ async def parse_natural_input(input_data: NaturalInput, db: Session = Depends(ge
     # Default: add
     if existing:
         existing.quantity += float(parsed["quantity"])
+        # Update volume estimate if we got a better one from LLM
+        ev = parsed.get("estimated_volume")
+        if ev and (not existing.estimated_volume):
+            existing.estimated_volume = ev
         db.commit()
         db.refresh(existing)
         update_inventory_timestamp(db)
         return existing
 
+    ev = parsed.get("estimated_volume") or VOLUME_DEFAULTS.get(parsed["unit"], 150)
     db_item = FreezerItem(
         name=parsed["name"],
         quantity=float(parsed["quantity"]),
         unit=parsed["unit"],
         container_id=input_data.container_id,
+        estimated_volume=ev,
     )
     db.add(db_item)
     db.commit()
     db.refresh(db_item)
     update_inventory_timestamp(db)
     return db_item
+
+
+
+
 
 
 @app.post("/api/parse-bulk", response_model=List[ItemResponse])
@@ -798,11 +918,13 @@ async def parse_bulk_input(input_data: BulkParseInput, db: Session = Depends(get
                 db.refresh(existing)
                 results.append(existing)
             else:
+                ev = parsed.get("estimated_volume") or VOLUME_DEFAULTS.get(parsed["unit"], 150)
                 db_item = FreezerItem(
                     name=parsed["name"],
                     quantity=float(parsed["quantity"]),
                     unit=parsed["unit"],
                     container_id=input_data.container_id,
+                    estimated_volume=ev,
                 )
                 db.add(db_item)
                 db.commit()

@@ -31,7 +31,7 @@ class ErrorBoundary extends Component {
 
 const API_BASE = '/api'
 const DEFAULT_W = 33, DEFAULT_D = 20, DEFAULT_H = 34
-const VOLUME_ESTIMATES = { lbs: 245, g: 0.15, gallon: 315, count: 350 }
+// Volume defaults moved to backend; capacity fetched from API
 const SWIPE_THRESHOLD = 60
 const SWIPE_MAX = 140
 
@@ -123,6 +123,7 @@ function App() {
     return saved ? parseInt(saved, 10) : null
   })
   const [items, setItems] = useState([])
+  const [backendCapacity, setBackendCapacity] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [naturalInput, setNaturalInput] = useState('')
   const [parsing, setParsing] = useState(false)
@@ -132,10 +133,6 @@ function App() {
   const [showAddRow, setShowAddRow] = useState(false)
   const [sortKey, setSortKey] = useState('quantity')
   const [sortAsc, setSortAsc] = useState(false)
-  const [calibration, setCalibration] = useState(() => {
-    const saved = localStorage.getItem('freezer-calibration')
-    return saved ? JSON.parse(saved) : null
-  })
   const [editingCapacity, setEditingCapacity] = useState(false)
   const [capacityInput, setCapacityInput] = useState('')
   
@@ -158,33 +155,43 @@ function App() {
 
   const activeContainer = containers.find(c => c.id === activeContainerId)
 
-  const getContainerVolume = () => {
-    if (!activeContainer) return DEFAULT_W * DEFAULT_D * DEFAULT_H
-    return (activeContainer.width || DEFAULT_W) * (activeContainer.depth || DEFAULT_D) * (activeContainer.height || DEFAULT_H)
+  const fetchCapacity = async () => {
+    if (!activeContainerId) return
+    try {
+      const r = await fetch(`${API_BASE}/containers/${activeContainerId}/capacity`)
+      if (r.ok) setBackendCapacity(await r.json())
+    } catch (err) { console.error("fetchCapacity failed:", err) }
   }
-  const calculateRawCapacity = () => {
-    let total = 0
-    items.forEach(i => { total += i.quantity * (VOLUME_ESTIMATES[i.unit] || VOLUME_ESTIMATES.count) })
-    return (total / getContainerVolume()) * 100
-  }
-  const rawCapacity = calculateRawCapacity()
-  const getCalibratedCapacity = () => {
-    if (!calibration) return Math.min(100, Math.round(rawCapacity))
-    return Math.min(100, Math.round(rawCapacity * (calibration.calibratedValue / calibration.rawAuto)))
-  }
-  const capacityPercent = getCalibratedCapacity()
-  const isCalibrated = calibration !== null
+  const capacityPercent = backendCapacity ? backendCapacity.percent_full : 0
+  const isCalibrated = backendCapacity ? backendCapacity.calibrated : false
+  const rawCapacity = backendCapacity ? (backendCapacity.raw_percent || backendCapacity.percent_full) : 0
 
-  const saveManualCapacity = () => {
+  const saveManualCapacity = async () => {
     const val = parseInt(capacityInput, 10)
-    if (!isNaN(val) && val >= 0 && val <= 100) {
-      const c = { rawAuto: rawCapacity, calibratedValue: val }
-      setCalibration(c)
-      localStorage.setItem('freezer-calibration', JSON.stringify(c))
+    if (!isNaN(val) && val >= 0 && val <= 100 && activeContainerId) {
+      try {
+        await fetch(`${API_BASE}/containers/${activeContainerId}/calibrate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ actual_percent: val })
+        })
+        fetchCapacity()
+      } catch (err) { console.error("calibrate failed:", err) }
     }
     setEditingCapacity(false)
   }
-  const resetCalibration = () => { setCalibration(null); localStorage.removeItem('freezer-calibration') }
+  const resetCalibration = async () => {
+    if (activeContainerId) {
+      try {
+        await fetch(`${API_BASE}/containers/${activeContainerId}/calibrate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ actual_percent: null })
+        })
+        fetchCapacity()
+      } catch (err) { console.error("reset calibration failed:", err) }
+    }
+  }
 
   const fetchContainers = async () => { 
     try {
@@ -231,7 +238,7 @@ function App() {
   useEffect(() => { 
     Promise.all([fetchContainers(), fetchLastUpdated()]).finally(() => setLoading(false))
   }, [])
-  useEffect(() => { if (activeContainerId) fetchItems() }, [activeContainerId])
+  useEffect(() => { if (activeContainerId) { fetchItems(); fetchCapacity() } }, [activeContainerId])
 
   const handleNaturalSubmit = async (e) => {
     e.preventDefault()
@@ -243,21 +250,21 @@ function App() {
         body: JSON.stringify({ text: naturalInput, container_id: activeContainerId })
       })
       setNaturalInput('')
-      fetchItems(); fetchLastUpdated()
+      fetchItems(); fetchCapacity(); fetchLastUpdated()
     } finally { setParsing(false) }
   }
 
-  const handleDelete = async (id) => { await fetch(`${API_BASE}/items/${id}`, { method: 'DELETE' }); fetchItems(); fetchLastUpdated() }
+  const handleDelete = async (id) => { await fetch(`${API_BASE}/items/${id}`, { method: 'DELETE' }); fetchItems(); fetchCapacity(); fetchLastUpdated() }
   const startEditing = (item) => { setEditingId(item.id); setEditForm({ name: item.name, quantity: item.quantity, unit: item.unit }) }
   const saveEdit = async (id) => {
     await fetch(`${API_BASE}/items/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editForm) })
-    setEditingId(null); fetchItems(); fetchLastUpdated()
+    setEditingId(null); fetchItems(); fetchCapacity(); fetchLastUpdated()
   }
   const cancelEdit = () => { setEditingId(null); setEditForm({}) }
   const handleAddNew = async () => {
     if (!newItem.name || !newItem.quantity) return
     await fetch(`${API_BASE}/items`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...newItem, quantity: parseFloat(newItem.quantity), container_id: activeContainerId }) })
-    setNewItem({ name: '', quantity: '', unit: 'count' }); setShowAddRow(false); fetchItems(); fetchLastUpdated()
+    setNewItem({ name: '', quantity: '', unit: 'count' }); setShowAddRow(false); fetchItems(); fetchCapacity(); fetchLastUpdated()
   }
   
   // Container management handlers
@@ -337,6 +344,7 @@ function App() {
             body: JSON.stringify({ text: transcript, container_id: activeContainerId })
           })
           fetchItems()
+          fetchCapacity()
           fetchLastUpdated()
         } catch (error) {
           console.error('Failed to process voice input:', error)

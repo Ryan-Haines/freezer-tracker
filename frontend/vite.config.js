@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 
 const allowedHosts = process.env.VITE_ALLOWED_HOSTS
   ? process.env.VITE_ALLOWED_HOSTS.split(',')
-  : []
+  : ['all']
 
 export default defineConfig({
   plugins: [react()],
